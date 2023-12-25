@@ -1,0 +1,12 @@
+[submodule "micropython"]
+	path = micropython
+	url = https://github.com/micropython/micropython
+[submodule "lib/lv_binding_micropython"]
+	path = modules/lvgl/lv_binding_micropython
+	url = https://github.com/lvgl/lv_binding_micropython
+[submodule "lib/esp-idf"]
+	path = lib/esp-idf
+	url = https://github.com/espressif/esp-idf
+[submodule "modules/lcd_binding_micropython"]
+	path = modules/lcd_binding_micropython
+	url = git@github.com:jmgrosen/lcd_binding_micropython

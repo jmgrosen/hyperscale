@@ -11,7 +11,6 @@ import struct
 
 
 _WEIGHT_STRUCT = "<f"
-_
 
 
 def _encode_weight(w):
@@ -42,13 +41,12 @@ zero_characteristic = aioble.Characteristic(
     scale_service, _ZERO_CHARACTERISTIC_UUID, write=True
 )
 zeroed_characteristic = aioble.Characteristic(
-    scale_service, _ZEROED_CHARACTERISTIC_UUID, indicate=True
+    scale_service, _ZEROED_CHARACTERISTIC_UUID, notify=True
 )
 aioble.register_services(scale_service)
 
 
 def update_weight(w):
-    print(f"updating weight, {weight_characteristic._value_handle is not None}")
     weight_characteristic.write(_encode_weight(w), send_update=True)
 
 # Serially wait for connections. Don't advertise while a central is
