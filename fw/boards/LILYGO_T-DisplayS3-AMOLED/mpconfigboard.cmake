@@ -16,6 +16,8 @@ set(SDKCONFIG_DEFAULTS boards/sdkconfig.base
                        boards/sdkconfig.240mhz
                        ${CMAKE_CURRENT_LIST_DIR}/sdkconfig.board
                        ${CMAKE_CURRENT_LIST_DIR}/sdkconfig.partitions
+		       boards/sdkconfig.spiram_sx
+		       boards/sdkconfig.spiram_oct
 )
 
 set(MICROPY_FROZEN_MANIFEST ${CMAKE_CURRENT_LIST_DIR}/manifest.py)

@@ -13,5 +13,13 @@ class Observable:
     @value.setter
     def value(self, new_value):
         self._value = new_value
+        self.trigger()
+
+    def update_to(self, new_value):
+        def updater(_):
+            self.value = new_value
+        return updater
+
+    def trigger(self):
         self.event.set()
         self.event.clear()
