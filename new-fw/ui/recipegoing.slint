@@ -1,0 +1,113 @@
+import { Button, VerticalBox, AboutSlint, Slider, StandardButton, CheckBox , HorizontalBox, ProgressIndicator, ListView , ScrollView} from "std-widgets.slint";
+
+import { WeighingIngredient, WeighingContainer } from "weighingingredient.slint";
+import { Ingredient, IngredientProgress, Recipe, RecipeProgress } from "recipe.slint";
+import { IngredientList } from "ingredientlist.slint";
+import { ScaleControls } from "scale.slint";
+
+// weird syntax
+export { ScaleControls }
+
+export component RecipeGoing inherits Rectangle {
+    in property<float> current-weight: 0.1;
+    in-out property<bool> focused: false;
+    in-out property<int> selected-ingredient: 0;
+    in property<Recipe> recipe: {
+        name: "Chocolate Chip Cookies",
+        ingredients: [
+            { name: "butter", amount: 0.230 },
+            { name: "light brown sugar", amount: 0.123 },
+            { name: "white sugar", amount: 0.234 },
+            { name: "all-purpose flour", amount: 0.345 },
+            { name: "chocolate", amount: 0.456 },
+            { name: "vanilla extract", amount: 0.070 },
+        ],
+    };
+    in-out property<RecipeProgress> recipe-progress;
+    callback back();
+    callback update-progress();
+
+    background: black;
+    width: 536px;
+    height: 240px;
+
+    forward-focus: ingredient-list;
+
+	function focus-ingredient(y: bool) {
+		if (y) {
+			weighing-ingredient.focus();
+			// self.focus();
+		} else {
+			ingredient-list.focus();
+		}
+		focused = y;
+	}
+
+    FocusScope {
+        key-released(event) => {
+            if (event.text == Key.LeftArrow) {
+                if (focused) {
+				    focus-ingredient(false);
+                } else {
+                    back();
+                }
+                accept
+            } else {
+                reject
+            }
+        }
+
+    	HorizontalLayout {
+    	    x: focused ? -536px : 0px;
+    	    animate x { duration: 400ms; easing: ease-in-out; }
+
+    	    // ingredients list
+    	    ingredient-list := IngredientList {
+                recipe: recipe;
+				ingredient-progresses: recipe-progress.ingredient-progresses;
+    	        selected-ingredient <=> selected-ingredient;
+				ingredient-focused => {
+					focus-ingredient(true);
+				}
+                update-scale-factor => {
+                    recipe-progress.scale-factor = self.scale-factor;
+                    update-progress();
+                }
+    	    }
+
+			/*
+			ScrollView {
+				width: 536px;
+				height: 240px;
+				viewport-y: -selected-ingredient * 240px;
+    			animate viewport-y { duration: 250ms; easing: ease-in-out; }
+
+				VerticalLayout {
+					width: 536px;
+					height: 240px * ingredients.length;
+					for ingredient[idx] in ingredients : WeighingIngredient {
+						width: 536px;
+						height: 240px;
+						current-weight <=> current-weight;
+						ingredient: ingredient;
+						ingredient-progress: ingredient-progresses[idx];
+					}
+				}
+			}
+			*/
+
+    	    // scale view
+    	    weighing-ingredient := WeighingContainer {
+	            current-weight <=> current-weight;
+    	        ingredients: recipe.ingredients;
+				ingredient-progresses: recipe-progress.ingredient-progresses;
+                update-progress => {
+                    recipe-progress.ingredient-progresses = self.ingredient-progresses;
+                    update-progress();
+                }
+				selected <=> selected-ingredient;
+				recipe-scale-factor: ingredient-list.scale-factor;
+    	    }
+    	}
+	}
+}

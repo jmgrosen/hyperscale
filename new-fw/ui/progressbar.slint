@@ -1,0 +1,50 @@
+import { Palette } from "styling.slint";
+
+export component ProgressBar {
+    in property<float> progress;
+    in property<brush> background-brush: Palette.primary-desat;
+    in property<brush> bar-brush: Palette.primary;
+
+    Rectangle {
+        background: background-brush;
+        clip: true;
+        // border-radius: min(self.width, self.height) / 2;
+
+        Rectangle {
+            x: 0;
+            width: parent.width * progress;
+            vertical-stretch: 1;
+            background: bar-brush;
+            // border-radius: min(parent.width, parent.height) / 2;
+        }
+    }
+}
+
+export component DoubleProgressBar {
+    in property<float> progress;
+    in property<brush> background-brush: Palette.primary-desat;
+    in property<brush> bar-brush: Palette.primary;
+    in property<brush> overbar-brush: Palette.error;
+
+    Rectangle {
+        background: background-brush;
+        clip: true;
+        // border-radius: min(self.width, self.height) / 2;
+
+        Rectangle {
+            x: 0;
+            width: parent.width * progress;
+            vertical-stretch: 1;
+            background: bar-brush;
+            // border-radius: min(parent.width, parent.height) / 2;
+        }
+
+        if progress > 1.0: Rectangle {
+            x: parent.width * (2.0 - progress);
+            width: parent.width * (progress - 1.0);
+            vertical-stretch: 1;
+            background: overbar-brush;
+            // border-radius: min(parent.width, parent.height) / 2;
+        }
+    }
+}

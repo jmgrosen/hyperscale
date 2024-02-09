@@ -1,0 +1,47 @@
+[package]
+name = "scale-fw"
+version = "0.1.0"
+authors = ["Jessie Grosen"]
+edition = "2021"
+license = "GPL 3"
+repository = "https://github.com/jmgrosen/smart-scale"
+description = "Firmware for my recipe-guiding scale"
+
+[dependencies]
+hal = { package = "esp32s3-hal", version = "0.15.0", features = [
+    "eh1",
+    "rt",
+    "opsram-8m",
+    # "psram-80mhz",
+] }
+esp-backtrace = { version = "0.7.0", features = [
+    "esp32s3",
+    "panic-handler",
+    "exception-handler",
+    "print-uart",
+] }
+esp-println = { version = "0.5.0", features = ["esp32s3"] }
+esp-alloc = { version = "0.3.0" }
+
+embedded-hal-1 = { package = "embedded-hal", version = "1.0.0" }
+embedded-graphics = { version = "0.8.0" }
+t-display-s3-amoled = { git = "https://github.com/jmgrosen/t-display-s3-amoled-rs", rev = "16f0234" }
+slint = { version = "1.3", default-features = false, features = [
+    "libm",
+    "unsafe-single-threaded",
+] }
+tinygif = "0.0.3"
+
+rotary-encoder-hal = { git = "https://github.com/leshow/rotary-encoder-hal", rev = "6a21b2f", features = ["table-decoder"] }
+critical-section = { version = "1.1.2" }
+
+nau7802 = { path = "/Users/jessie/projects/nau7802-rs" }
+nb = "1"
+heapless = "0.8"
+debouncr = "0.2.2"
+
+[build-dependencies]
+slint-build = "1.3"
+
+[features]
+default = []

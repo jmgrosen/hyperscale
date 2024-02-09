@@ -1,0 +1,72 @@
+import { Button, VerticalBox, AboutSlint, Slider, StandardButton, CheckBox , HorizontalBox, ProgressIndicator, ListView , ScrollView} from "std-widgets.slint";
+
+// import "./zpix.ttf";
+import "./FiraSans-Regular.otf";
+import "./FiraSans-Medium.otf";
+import "./FiraMono-Medium.otf";
+import { WeighingIngredient, WeighingContainer } from "weighingingredient.slint";
+import { Ingredient, IngredientProgress, Recipe, RecipeProgress } from "recipe.slint";
+import { IngredientList } from "ingredientlist.slint";
+import { ScaleControls } from "scale.slint";
+import { RecipeGoing } from "recipegoing.slint";
+import { RecipeList } from "recipelist.slint";
+import { RecipesGoing } from "recipesgoing.slint";
+
+// weird syntax
+export { ScaleControls }
+
+export component AppWindow inherits Window {
+    default-font-family: "Fira Sans";
+    default-font-size: 40px;
+    default-font-weight: 400;
+
+    width: 536px;
+    height: 240px;
+    in property<float> current-weight: 0.1;
+    in-out property<int> selected-ingredient: 0;
+    property<Recipe> recipe: {
+        name: "Chocolate Chip Cookies",
+        ingredients: [
+            { name: "butter", amount: 0.230 },
+            { name: "light brown sugar", amount: 0.123 },
+            { name: "white sugar", amount: 0.234 },
+            { name: "all-purpose flour", amount: 0.345 },
+            { name: "chocolate", amount: 0.456 },
+            { name: "vanilla extract", amount: 0.070 },
+        ],
+    };
+	in property<[Recipe]> recipes: [
+		recipe,
+		recipe,
+		recipe,
+	];
+	property<[IngredientProgress]> ingredient-progresses: [
+		{ done: true, amount: 0.229 },
+		{ done: true, amount: 0.119 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+	];
+	property<RecipeProgress> recipe-progress: { scale-factor: 1.0, ingredient-progresses: ingredient-progresses };
+	in-out property<[RecipeProgress]> recipe-progresses: [recipe-progress, recipe-progress, recipe-progress];
+    background: black;
+
+    forward-focus: recipes-going;
+
+	recipes-going := RecipesGoing {
+		current-weight: current-weight;
+		recipes: recipes;
+		recipe-progresses: recipe-progresses;
+	}
+
+	/*
+	recipe-going := RecipeGoing {
+		current-weight: current-weight;
+		selected-ingredient <=> selected-ingredient;
+		recipe: recipe;
+		ingredient-progresses <=> ingredient-progresses;
+	}
+	*/
+}
+

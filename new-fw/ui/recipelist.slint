@@ -1,0 +1,70 @@
+import { HorizontalBox, ScrollView , GridBox, VerticalBox} from "std-widgets.slint";
+
+import { Ingredient, IngredientProgress, Recipe } from "recipe.slint";
+import { Palette } from "styling.slint";
+import { StrikethroughText } from "strikethrough.slint";
+
+export component RecipeList inherits ScrollView {
+    in property<[Recipe]> recipes;
+    out property<int> selected-recipe;
+    callback recipe-focused();
+
+    property<length> item-height : 56px;
+
+    width: 536px;
+    height: 240px;
+    viewport-y: -recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
+    animate viewport-y { duration: 250ms; easing: ease-in-out; }
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-released(event) => {
+            if (event.text == Key.UpArrow) {
+                selected-recipe = max(0, selected-recipe - 1);
+                accept
+            } else if (event.text == Key.DownArrow) {
+                selected-recipe = min(recipes.length - 1, selected-recipe + 1);
+                accept
+            } else if (event.text == Key.RightArrow) {
+                recipe-focused();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    VerticalLayout {
+        width: parent.width;
+
+        recipes-text := VerticalBox {
+            width: parent.width;
+            padding-bottom: 0;
+            Text {
+                color: white;
+                text: "Recipes";
+                font-size: 60px;
+                font-weight: 700;
+            }
+        }
+
+        for recipe[idx] in recipes : Rectangle {
+            width: parent.width;
+            height: item-height;
+            background: idx == selected-recipe ? Palette.primary : black;
+
+            HorizontalBox {
+                width: parent.width;
+                height: 64px;
+                padding-top: 8px;
+                padding-bottom: 0;
+                alignment: start;
+
+                Text {
+                    color: white;
+                    text: recipe.name;
+                }
+            }
+        }
+    }
+}

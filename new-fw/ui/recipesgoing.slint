@@ -1,0 +1,39 @@
+import { Recipe, RecipeProgress } from "recipe.slint";
+import { RecipeList } from "recipelist.slint";
+import { RecipeGoing } from "recipegoing.slint";
+
+export component RecipesGoing inherits Rectangle {
+    in property<[Recipe]> recipes;
+    in-out property<[RecipeProgress]> recipe-progresses;
+    in property<float> current-weight;
+
+    property<bool> focused : false;
+
+    forward-focus: recipe-list;
+
+    HorizontalLayout {
+        x: focused ? -536px : 0px;
+        animate x { duration: 400ms; easing: ease-in-out; }
+
+        recipe-list := RecipeList {
+            recipes: recipes;
+            recipe-focused => {
+                focused = true;
+                recipe-going.focus();
+            }
+        }
+
+        recipe-going := RecipeGoing {
+            recipe: recipes[recipe-list.selected-recipe];
+            recipe-progress: recipe-progresses[recipe-list.selected-recipe];
+            update-progress => {
+                recipe-progresses[recipe-list.selected-recipe] = recipe-going.recipe-progress;
+            }
+            current-weight: current-weight;
+            back => {
+                focused = false;
+                recipe-list.focus();
+            }
+        }
+    }
+}

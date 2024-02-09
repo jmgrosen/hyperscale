@@ -1,0 +1,241 @@
+import { HorizontalBox, ScrollView , GridBox, VerticalBox} from "std-widgets.slint";
+
+import { Ingredient, IngredientProgress, Recipe } from "recipe.slint";
+import { Palette } from "styling.slint";
+import { StrikethroughText } from "strikethrough.slint";
+
+global ScaleFactor {
+    out property<[string]> names : ["¼", "⅓", "½", "⅔", "1", "3⁄2", "2", "3", "4"];
+    out property<[float]> factors : [0.25, 1.0/3.0, 0.5, 2.0/3.0, 1.0, 1.5, 2.0, 3.0, 4.0];
+    out property<int> count : names.length;
+}
+
+component ScaleFactorChooser inherits Rectangle {
+    in property<bool> selected : false;
+    in property<bool> focused : false;
+    in-out property<float> scale-factor: ScaleFactor.factors[scale-factor-idx];
+    callback done();
+
+    property<length> factor-width: 30px;
+    property<length> factor-spacing: 2px;
+    // TODO: somehow pick this up from scale-factor when it's set??
+    property<int> scale-factor-idx : 4;
+
+    height: 64px;
+    background: selected ? Palette.primary : black;
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-released(event) => {
+            if (event.text == Key.UpArrow) {
+                scale-factor-idx = max(0, scale-factor-idx - 1);
+                accept
+            } else if (event.text == Key.DownArrow) {
+                scale-factor-idx = min(ScaleFactor.count - 1, scale-factor-idx + 1);
+                accept
+            } else if (event.text == Key.RightArrow || event.text == Key.LeftArrow) {
+                done();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    HorizontalBox {
+        alignment: stretch;
+        width: parent.width;
+        height: 64px;
+        padding-bottom: 0;
+        Text {
+            font-size: 40px;
+            text: "Scaling:";
+            color: white;
+            horizontal-stretch: 1;
+        }
+
+        Rectangle {
+            background: black;
+            height: 48px;
+            Rectangle {
+                x: (factor-width + factor-spacing) * scale-factor-idx;
+                animate x { duration: 250ms; easing: ease-in-out; }
+                width: factor-width;
+                border-width: focused ? 2px : 0px;
+                border-color: white;
+                background: Palette.primary;
+            }
+            HorizontalLayout {
+                spacing: factor-spacing;
+                for factor-name[idx] in ScaleFactor.names : /* Rectangle {
+                    /*
+                    border-width: focused && idx == scale-factor-idx ? 2px : 0px;
+                    border-color: white;
+                    background: idx == scale-factor-idx ? Palette.primary : black;
+                    */
+                    width: factor-width; */
+                    Text {
+                        width: factor-width;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                        font-size: 30px;
+                        text: factor-name;
+                        color: white;
+                    }
+                // }
+            }
+        }
+    }
+}
+
+component IngredientItem inherits Rectangle {
+    // TODO: prevent long ingredient names from overflowing
+    in property<Ingredient> ingredient : { name : "brown sugar", amount : 0.23 };
+    in property<IngredientProgress> progress : { done : false, amount : 0.228 };
+    in property<bool> selected : false;
+    in property<float> scale-factor : 1.0;
+
+    private property<float> amount : progress.done ? progress.amount : ingredient.amount * scale-factor;
+    
+    height: 64px;
+    background: selected ? Palette.primary : black;
+
+    HorizontalBox {
+        alignment: space-between;
+        width: parent.width;
+        height: 64px;
+        spacing: 10px;
+        padding-top: 8px;
+        padding-bottom: 0;
+
+        StrikethroughText {
+            font-size: 40px;
+            color: progress.done ? white.darker(0.2) : white;
+            text: ingredient.name;
+            strikethrough: progress.done;
+        }
+
+        StrikethroughText {
+            font-size: 40px;
+            color: progress.done ? white.darker(0.2) : white;
+            text: "\{round(amount * 1000)}g";
+            strikethrough: progress.done;
+        }
+    }
+}
+
+enum Selection {
+    ScaleFactorChooser,
+    Ingredient,
+}
+
+export component IngredientList inherits ScrollView {
+    in property<Recipe> recipe;
+    in property <[IngredientProgress]> ingredient-progresses;
+    in-out property <int> selected-ingredient: 0;
+    in-out property<float> scale-factor <=> sfchooser.scale-factor;
+    callback ingredient-focused();
+    callback update-scale-factor();
+
+    property<Selection> selection : Ingredient;
+    property<length> item-height : 56px;
+
+    pure function selected-offset() -> int {
+        if (selection == Selection.ScaleFactorChooser) {
+            return 0;
+        } else { // Ingredient
+            return 1 + selected-ingredient;
+        }
+    }
+
+    width: 536px;
+    height: 240px;
+    viewport-y: -name-text.height + -selected-offset() * item-height + (self.height - item-height) / 2;
+    animate viewport-y { duration: 250ms; easing: ease-in-out; }
+
+    function move-selection-up() {
+        if (selection == Selection.ScaleFactorChooser) {
+            // first option, do nothing
+        } else { // selection == Ingredient
+            if (selected-ingredient == 0) {
+                selection = Selection.ScaleFactorChooser;
+            } else {
+                selected-ingredient -= 1;
+            }
+        }
+    }
+
+    function move-selection-down() {
+        if (selection == Selection.ScaleFactorChooser) {
+            selection = Selection.Ingredient;
+            selected-ingredient = 0;
+        } else { // selection == Ingredient
+            selected-ingredient = min(selected-ingredient + 1, recipe.ingredients.length - 1);
+        }
+    }
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-released(event) => {
+            if (event.text == Key.UpArrow) {
+                move-selection-up();
+                accept
+            } else if (event.text == Key.DownArrow) {
+                move-selection-down();
+                accept
+            } else if (event.text == Key.RightArrow) {
+                if (selection == Selection.ScaleFactorChooser) {
+                    sfchooser.focused = true;
+                    sfchooser.focus();
+                } else { // selection == Ingredient
+                    ingredient-focused();
+                }
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+    
+    function focus-list() {
+        self.focus();
+    }
+
+    VerticalLayout {
+        width: parent.width;
+
+        name-text := VerticalBox {
+            width: parent.width;
+            padding-bottom: 0;
+            Text {
+                color: white;
+                text: recipe.name;
+                font-size: 60px;
+                font-weight: 700;
+                // wrap: word-wrap;
+            }
+        }
+
+        sfchooser := ScaleFactorChooser {
+            selected: selection == Selection.ScaleFactorChooser;
+            done() => {
+                sfchooser.focused = false;
+                update-scale-factor();
+                focus-list();
+            }
+
+            width: parent.width - 4px;
+            height: item-height;
+        }
+
+        for ingredient[idx] in recipe.ingredients : IngredientItem {
+            ingredient: ingredient;
+            progress: ingredient-progresses[idx];
+            scale-factor: sfchooser.scale-factor;
+            selected: selection == Selection.Ingredient && idx == selected-ingredient;
+
+            width: parent.width - 4px; // ??? why is this offset needed?
+            height: item-height;
+        }
+    }
+}

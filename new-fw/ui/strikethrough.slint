@@ -1,0 +1,19 @@
+export component StrikethroughText inherits Text {
+    in property<bool> strikethrough: true;
+    in property<length> line-width: 3px;
+
+    property<brush> text-color;
+    color <=> text-color;
+
+    VerticalLayout {
+        alignment: space-around;
+        x: 0px;
+        width: strikethrough ? parent.width + 2px : 0px;
+        animate width { duration: 250ms; easing: ease-in-out; }
+
+        Rectangle {
+            background: text-color;
+            height: line-width;
+        }
+    }
+}

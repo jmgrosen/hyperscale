@@ -1,0 +1,44 @@
+export struct Ingredient {
+    name: string,
+    amount: float,
+}
+
+export global IngredientUtils {
+    public pure function scale(ingredient: Ingredient, factor: float) -> Ingredient {
+        { name: ingredient.name, amount: ingredient.amount * factor }
+    }
+}
+
+export struct Recipe {
+    name: string,
+    ingredients: [Ingredient],
+}
+
+export struct IngredientProgress {
+    done: bool,
+    amount: float,
+}
+
+export struct RecipeProgress {
+    scale-factor: float,
+    ingredient-progresses: [IngredientProgress],
+}
+
+export global ExampleRecipe {
+    out property<[Ingredient]> ingredients: [
+        { name: "ingredient 1", amount: 0.230 },
+        { name: "ingredient 2", amount: 0.123 },
+        { name: "ingredient 3", amount: 0.234 },
+        { name: "ingredient 4", amount: 0.345 },
+        { name: "ingredient 5", amount: 0.456 },
+        { name: "ingredient 6", amount: 0.070 },
+    ];
+    out property<[IngredientProgress]> progresses: [
+		{ done: true, amount: 0.229 },
+		{ done: true, amount: 0.119 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+	];
+}

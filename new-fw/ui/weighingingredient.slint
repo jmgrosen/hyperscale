@@ -1,0 +1,145 @@
+import { VerticalBox, ProgressIndicator, ScrollView } from "std-widgets.slint";
+
+import { Ingredient, IngredientUtils, IngredientProgress, ExampleRecipe } from "recipe.slint";
+import { DoubleProgressBar } from "progressbar.slint";
+import { ScaleControls } from "scale.slint";
+import { StrikethroughText } from "strikethrough.slint";
+import { Palette } from "styling.slint";
+
+export component WeighingIngredient inherits VerticalBox {
+    in property<float> current-weight: 0.1;
+    in property<Ingredient> ingredient: { name: "light brown sugar", amount: 0.234 };
+    in property<IngredientProgress> ingredient-progress: { done: false, amount: 0 };
+    callback done();
+    callback undone();
+
+    private property<float> display-weight: ingredient-progress.done ? ingredient-progress.amount : current-weight;
+
+    width: 536px;
+    height: 240px;
+    horizontal-stretch: 1;
+    alignment: space-between;
+
+    GridLayout {
+        DoubleProgressBar {
+            progress: display-weight / ingredient.amount;
+            bar-brush: ingredient-progress.done ? Palette.done : Palette.primary;
+            animate bar-brush { duration: 250ms; easing: ease-in-out; }
+            row: 0;
+            col: 0;
+        }
+        Text {
+            text: "\{round(display-weight * 1000.0)}g";
+            row: 0;
+            col: 0;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            font-size: 128px;
+            font-weight: 800;
+            font-family: "Fira Mono";
+            color: white;
+        }
+    }
+
+    HorizontalLayout {
+        alignment: space-between;
+
+        StrikethroughText {
+            text: ingredient.name;
+            strikethrough: ingredient-progress.done;
+            color: ingredient-progress.done ? white.darker(0.2) : white;
+            animate color { duration: 250ms; easing: ease-in-out; }
+            line-width: 2px;
+        }
+
+        StrikethroughText {
+            text: "\{round(ingredient.amount * 1000.0)}g";
+            strikethrough: ingredient-progress.done;
+            color: ingredient-progress.done ? white.darker(0.2) : white;
+            animate color { duration: 250ms; easing: ease-in-out; }
+            line-width: 2px;
+        }
+    }
+}
+
+export component WeighingContainer inherits Rectangle {
+    in property<[Ingredient]> ingredients: ExampleRecipe.ingredients;
+    in-out property<[IngredientProgress]> ingredient-progresses: ExampleRecipe.progresses;
+    in property<float> current-weight: 0.1;
+    in-out property<int> selected: 0;
+    in property<float> recipe-scale-factor: 1.0;
+    callback update-progress();
+
+    private property<bool> active1: true;
+    private property<int> prev-selected: max(0, selected - 1);
+    private property<int> index1: active1 ? selected : prev-selected;
+    private property<int> index2: active1 ? prev-selected : selected;
+
+    width: 536px;
+    height: 480px * ingredients.length;
+    background: black;
+
+    // TODO: the animation applies when we change out the ingredient{,-progress} on the "back buffer",
+    // which we don't want. but maybe it's ignorable enough for now, especially considering that
+    // current-weight doesn't animate so the progress bar and weight text will instantly go to 0.
+
+    y: -selected * 240px;
+    animate y { duration: 500ms; easing: ease-in-out; }
+
+    function next() {
+        if (!ingredient-progresses[selected].done) {
+            ingredient-progresses[selected].done = true;
+            ingredient-progresses[selected].amount = current-weight;
+            update-progress();
+        }
+        if (selected < ingredients.length - 1) {
+            selected = selected + 1;
+            active1 = !active1;
+        }
+    }
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-pressed(event) => {
+            if (event.text == "d") {
+                if (ingredient-progresses[selected].done) {
+                    ingredient-progresses[selected].done = false;
+                } else {
+                    ScaleControls.zero();
+                }
+                accept
+            } else {
+                reject
+            }
+        }
+        key-released(event) => {
+            if (event.text == Key.RightArrow) {
+                next();
+                ScaleControls.zero();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
+    weighing1 := WeighingIngredient {
+        y: index1 * 240px;
+        // y: active1 ? 0px : 240px;
+        // animate y { duration: 500ms; easing: ease-in-out; delay: 500ms; }
+        // y: 0px;
+        current-weight <=> current-weight;
+        ingredient: IngredientUtils.scale(ingredients[index1], recipe-scale-factor);
+        ingredient-progress: ingredient-progresses[index1];
+    }
+
+    weighing2 := WeighingIngredient {
+        y: index2 * 240px;
+        // y: active1 ? 240px : 0px;
+        // animate y { duration: 500ms; easing: ease-in-out; delay: 500ms; }
+        // y: 240px;
+        current-weight <=> current-weight;
+        ingredient: IngredientUtils.scale(ingredients[index2], recipe-scale-factor);
+        ingredient-progress: ingredient-progresses[index2];
+    }
+}
