@@ -368,7 +368,7 @@ fn main() -> ! {
     init_psram_heap();
     println!("initted psram");
     let system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the RTC and TIMG watchdog timers
     let mut rtc = Rtc::new(peripherals.LPWR);
@@ -504,20 +504,7 @@ fn main() -> ! {
     let ui = AppWindow::new().unwrap();
     let _ui_handle = ui.as_weak();
 
-/*
-    let mut line_buffer = [Rgb565Pixel(0); 536];
-    let mut wrapper = DisplayWrapper {
-        display: &mut display,
-        line_buffer: &mut line_buffer,
-    };
-*/
-    // let mut frame_buffer: Box<[Rgb565PixelFlipped]> = Box::from([Rgb565PixelFlipped(0); 536*240]);
     let mut frame_buffer = FramebufLiner { framebuf: [Rgb565PixelFlipped(0); 536*240] };
-
-    println!("frame_buffer at {:p}", &frame_buffer);
-
-    // ui.set_ingredient_name(SharedString::from("butter"));
-    // ui.set_target_weight(0.230);
 
     let scale_ref = scale.clone();
     ui.global::<ScaleControls>().on_zero(move || {
@@ -566,35 +553,6 @@ fn main() -> ! {
                     break
             }
         }
-        /*
-        let cnt_diff = cnt - prev_encoder_cnt;
-        prev_encoder_cnt = cnt;
-        for _ in 0..cnt_diff.abs() {
-            let key = if cnt_diff > 0 { Key::UpArrow } else { Key::DownArrow };
-            println!("encoder press {}", cnt_diff > 0);
-            window.dispatch_event(WindowEvent::KeyPressed { text: key.into() });
-            window.dispatch_event(WindowEvent::KeyReleased { text: key.into() });
-        }
-        // really should do some debouncing, but oh well
-        let encoder_pressed = encoder_button.is_low().unwrap();
-        if encoder_pressed != prev_encoder_pressed {
-            window.dispatch_event(if encoder_pressed {
-                WindowEvent::KeyPressed { text: Key::RightArrow.into() }
-            } else {
-                WindowEvent::KeyReleased { text: Key::RightArrow.into() }
-            });
-            prev_encoder_pressed = encoder_pressed;
-        }
-        let back_pressed = back_button.is_low().unwrap();
-        if back_pressed != prev_back_pressed {
-            window.dispatch_event(if back_pressed {
-                WindowEvent::KeyPressed { text: Key::LeftArrow.into() }
-            } else {
-                WindowEvent::KeyReleased { text: Key::LeftArrow.into() }
-            });
-            prev_back_pressed = back_pressed;
-        }
-        */
 
         if let Ok(val) = scale_adc.read() {
             let mut scale = scale.borrow_mut();

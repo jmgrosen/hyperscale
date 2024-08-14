@@ -1697,6 +1697,7 @@ checksum = "b4bb1638d419e12f8b1c43d9e639abd0d1424285bdea2f76aa231e233c63cd3a"
 [[package]]
 name = "nau7802"
 version = "0.1.0-alpha"
+source = "git+https://github.com/jmgrosen/nau7802-rs?rev=63b17fe#63b17fed708182b653c7d23df499231747dac269"
 dependencies = [
  "byteorder",
  "embedded-hal 1.0.0",
