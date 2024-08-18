@@ -20,14 +20,15 @@ use esp_backtrace as _;
 use esp_println::println;
 use hal::peripherals::TIMG0;
 use hal::spi::master::Spi;
-use hal::systimer::SystemTimer;
-use hal::timer::Timer0;
-use hal::Timer;
+use hal::timer::systimer::SystemTimer;
+use hal::timer::timg::{Timer, Timer0, TimerInterrupts};
 use hal::{
-    clock::{ClockControl, CpuClock}, dma::DmaPriority, gdma::Gdma, gpio::NO_PIN, peripherals::Peripherals,
-    prelude::*, timer::TimerGroup, Delay, Rtc, IO,
-    gpio::{Input, PullUp, Gpio1, Gpio2, Gpio3, Gpio10, self}, interrupt, peripherals,
+    dma_buffers,
+    clock::{ClockControl, CpuClock}, dma::DmaPriority, dma::Dma, gpio::NO_PIN, peripherals::Peripherals,
+    prelude::*, timer::timg::TimerGroup, delay::Delay, rtc_cntl::Rtc,
+    gpio::{Io, Input, Output, Level, Gpio1, Gpio2, Gpio3, Gpio10, Pull, self},
     i2c::I2C,
+    system::SystemControl,
     psram,
 };
 use hal::spi::master::prelude::*;
@@ -65,6 +66,7 @@ fn init_psram_heap() {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum ButtonEvent {
     Press,
     Release,
@@ -112,6 +114,7 @@ impl<P: InputPin> Button<P> {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 enum Event {
     WheelCW,
     WheelCCW,
@@ -120,18 +123,18 @@ enum Event {
 }
 
 struct InterruptResources {
-    encoder: Rotary<Gpio1<Input<PullUp>>, Gpio2<Input<PullUp>>, DefaultPhase>,
+    encoder: Rotary<Input<'static, Gpio1>, Input<'static, Gpio2>, DefaultPhase>,
     producer: Producer<'static, Event, 16>,
-    wheel_button: Button<Gpio3<Input<PullUp>>>,
-    back_button: Button<Gpio10<Input<PullUp>>>,
-    timer: Timer<Timer0<TIMG0>>,
+    wheel_button: Button<Input<'static, Gpio3>>,
+    back_button: Button<Input<'static, Gpio10>>,
+    timer: Timer<Timer0<TIMG0>, hal::Blocking>,
 }
 
 static INTERRUPT_RESOURCES: Mutex<RefCell<Option<InterruptResources>>> = Mutex::new(RefCell::new(None));
 
 #[ram]
-#[interrupt]
-fn GPIO() {
+#[handler]
+fn gpio_handler() {
     critical_section::with(|cs| {
         let mut borrowed_resources = INTERRUPT_RESOURCES.borrow_ref_mut(cs);
         let resources = borrowed_resources.as_mut().unwrap();
@@ -146,11 +149,11 @@ fn GPIO() {
     });
 }
 
-const TIMER_PERIOD_MS: u32 = 5;
+const TIMER_PERIOD_MS: u64 = 5;
 
 #[ram]
-#[interrupt]
-fn TG0_T0_LEVEL() {
+#[handler]
+fn timer0_handler() {
     critical_section::with(|cs| {
         let mut borrowed_resources = INTERRUPT_RESOURCES.borrow_ref_mut(cs);
         let resources = borrowed_resources.as_mut().unwrap();
@@ -164,7 +167,8 @@ fn TG0_T0_LEVEL() {
 
         if resources.timer.is_interrupt_set() {
             resources.timer.clear_interrupt();
-            resources.timer.start(TIMER_PERIOD_MS.millis());
+            resources.timer.load_value(TIMER_PERIOD_MS.millis()).unwrap();
+            resources.timer.start();
         }
     });
 }
@@ -348,6 +352,18 @@ fn creme_pat() -> Recipe {
     }
 }
 
+fn pasta_dough() -> Recipe {
+    Recipe {
+        name: "Egg Pasta".into(),
+        ingredients: [
+            ingredient("flour", 0.255),
+            ingredient("whole eggs", 0.110),
+            ingredient("egg yolks", 0.070),
+            ingredient("salt", 0.003),
+        ].into(),
+    }
+}
+
 fn progress_for_recipe(recipe: &Recipe) -> RecipeProgress {
     RecipeProgress {
         scale_factor: 1.0,
@@ -367,19 +383,21 @@ fn main() -> ! {
     psram::init_psram(peripherals.PSRAM);
     init_psram_heap();
     println!("initted psram");
-    let system = peripherals.SYSTEM.split();
+    let system = SystemControl::new(peripherals.SYSTEM);
     let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the RTC and TIMG watchdog timers
-    let mut rtc = Rtc::new(peripherals.LPWR);
+    let mut rtc = Rtc::new(peripherals.LPWR, None);
     let timer_group0 = TimerGroup::new(
         peripherals.TIMG0,
         &clocks,
+        Some(TimerInterrupts { timer0: Some(timer0_handler), ..Default::default() }),
     );
     let mut wdt0 = timer_group0.wdt;
     let timer_group1 = TimerGroup::new(
         peripherals.TIMG1,
         &clocks,
+        None,
     );
     let mut wdt1 = timer_group1.wdt;
     rtc.rwdt.disable();
@@ -388,7 +406,8 @@ fn main() -> ! {
     println!("Hello board!");
 
     // Set GPIO4 as an output, and set its state high initially.
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+    let mut io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+    io.set_interrupt_handler(gpio_handler);
     // let mut led = io.pins.gpio38.into_push_pull_output();
     // let _button = io.pins.gpio21.into_pull_down_input();
 
@@ -399,25 +418,25 @@ fn main() -> ! {
     let mut delay = Delay::new(&clocks);
 
     // set up rotary encoder
-    let mut pin_a = io.pins.gpio1.into_pull_up_input();
-    pin_a.listen(gpio::Event::AnyEdge);
-    let mut pin_b = io.pins.gpio2.into_pull_up_input();
-    pin_b.listen(gpio::Event::AnyEdge);
-    let rotary = Rotary::new(pin_a, pin_b);
+    let mut pin_a = Input::new(io.pins.gpio1, Pull::Up);
+    let mut pin_b = Input::new(io.pins.gpio2, Pull::Up);
     let event_queue: &'static mut Queue<Event, 16> = {
         static mut Q: Queue<Event, 16> = Queue::new();
         unsafe { &mut Q }
     };
     let (event_producer, mut event_consumer) = event_queue.split();
 
-    let encoder_button = io.pins.gpio3.into_pull_up_input();
-    let back_button = io.pins.gpio10.into_pull_up_input();
-
-    let mut timer00 = timer_group0.timer0;
-    timer00.start(TIMER_PERIOD_MS.millis());
-    timer00.listen();
+    let encoder_button = Input::new(io.pins.gpio3, Pull::Up);
+    let back_button = Input::new(io.pins.gpio10, Pull::Up);
     
+    let timer00 = timer_group0.timer0;
     critical_section::with(|cs| {
+        pin_a.listen(gpio::Event::AnyEdge);
+        pin_b.listen(gpio::Event::AnyEdge);
+        let rotary = Rotary::new(pin_a, pin_b);
+        timer00.load_value(TIMER_PERIOD_MS.millis()).unwrap();
+        timer00.start();
+        timer00.listen();
         INTERRUPT_RESOURCES.borrow_ref_mut(cs).replace(InterruptResources {
             encoder: rotary,
             producer: event_producer,
@@ -427,10 +446,7 @@ fn main() -> ! {
         });
     });
 
-    interrupt::enable(peripherals::Interrupt::GPIO, interrupt::Priority::Priority2).unwrap();
-    interrupt::enable(peripherals::Interrupt::TG0_T0_LEVEL, interrupt::Priority::Priority2).unwrap();
-
-    let i2c = I2C::new(peripherals.I2C0, io.pins.gpio43, io.pins.gpio44, 100u32.kHz(), &clocks);
+    let i2c = I2C::new(peripherals.I2C0, io.pins.gpio43, io.pins.gpio44, 100u32.kHz(), &clocks, None);
     let mut scale_adc = Nau7802::new(i2c, &mut delay).unwrap();
     let scale = Rc::new(RefCell::new(ScaleState::new(block!(scale_adc.read()).unwrap())));
 
@@ -445,17 +461,15 @@ fn main() -> ! {
     let d2 = io.pins.gpio48;
     let d3 = io.pins.gpio5;
 
-    let mut cs = cs.into_push_pull_output();
-    cs.set_high().unwrap();
-    
+    let cs = Output::new(cs, Level::High);
 
-    let mut rst = rst.into_push_pull_output();
+    let mut rst = Output::new(rst, Level::Low);
 
-    let dma = Gdma::new(peripherals.DMA);
+    let dma = Dma::new(peripherals.DMA);
     let dma_channel = dma.channel0;
 
     // Descriptors should be sized as (BUFFERSIZE / 4092) * 3
-    let mut descriptors = [0u32; 12];
+    // let mut descriptors = [0u32; 12];
     // let spi = Spi::new_half_duplex(
     //     peripherals.SPI2, // use spi2 host
     //     Some(sclk),
@@ -468,6 +482,7 @@ fn main() -> ! {
     //     hal::spi::SpiMode::Mode0,
     //     &clocks,
     // )
+    let (_tx_buffer, tx_descriptors, _rx_buffer, rx_descriptors) = dma_buffers!(16384, 0);
     let spi = Spi::new_half_duplex(
         peripherals.SPI2, // use spi2 host
         80_u32.MHz(), // max 75MHz
@@ -482,7 +497,11 @@ fn main() -> ! {
         Some(d3),
         NO_PIN,
     )
-    .with_dma(dma_channel.configure(false, &mut descriptors, &mut [], DmaPriority::Priority0));
+    .with_dma(
+        dma_channel.configure(false, DmaPriority::Priority0),
+        tx_descriptors,
+        rx_descriptors,
+    );
 
     let mut display = t_display_s3_amoled::rm67162::dma::RM67162Dma::new(spi, cs);
     display.reset(&mut rst, &mut delay).unwrap();
@@ -516,6 +535,7 @@ fn main() -> ! {
         vegan_creme_pat(),
         choux(),
         creme_pat(),
+        pasta_dough(),
     ];
     let progresses = recipes.iter().map(progress_for_recipe).collect::<Vec<_>>()[..].into();
     ui.set_recipes(recipes.into());
@@ -558,7 +578,7 @@ fn main() -> ! {
             let mut scale = scale.borrow_mut();
             scale.update(val);
             let cur_weight = scale.in_kg();
-            println!("scale: {}", cur_weight);
+            // println!("scale: {}", cur_weight);
         }
         // TODO: optimize
         ui.set_current_weight(scale.borrow().in_kg());
@@ -579,8 +599,8 @@ fn main() -> ! {
             let after_render = SystemTimer::now();
             let _res = unsafe { display.fill_with_framebuffer(cast_pixel_buffer(&frame_buffer.framebuf[..])) };
             let after_fill = SystemTimer::now();
-            println!("render: {}us", ((after_render - before_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
-            println!("fill: {}us", ((after_fill - after_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
+            // println!("render: {}us", ((after_render - before_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
+            // println!("fill: {}us", ((after_fill - after_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
         });
 
         if !window.has_active_animations() {

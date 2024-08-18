@@ -29,16 +29,16 @@ component ScaleFactorChooser inherits Rectangle {
         key-released(event) => {
             if (event.text == Key.UpArrow) {
                 scale-factor-idx = max(0, scale-factor-idx - 1);
-                accept
             } else if (event.text == Key.DownArrow) {
                 scale-factor-idx = min(ScaleFactor.count - 1, scale-factor-idx + 1);
-                accept
             } else if (event.text == Key.RightArrow || event.text == Key.LeftArrow) {
                 done();
-                accept
-            } else {
-                reject
             }
+            accept
+        }
+
+        key-pressed(event) => {
+            accept
         }
     }
 
@@ -179,10 +179,8 @@ export component IngredientList inherits ScrollView {
         key-released(event) => {
             if (event.text == Key.UpArrow) {
                 move-selection-up();
-                accept
             } else if (event.text == Key.DownArrow) {
                 move-selection-down();
-                accept
             } else if (event.text == Key.RightArrow) {
                 if (selection == Selection.ScaleFactorChooser) {
                     sfchooser.focused = true;
@@ -190,10 +188,17 @@ export component IngredientList inherits ScrollView {
                 } else { // selection == Ingredient
                     ingredient-focused();
                 }
-                accept
-            } else {
-                reject
             }
+            // HACK
+            if (event.text == Key.LeftArrow) {
+                reject
+            } else {
+                accept
+            }
+        }
+        key-pressed(event) => {
+            // seems like we have to accept these here? super weird
+            accept
         }
     }
     

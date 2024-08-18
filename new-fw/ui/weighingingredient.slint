@@ -50,6 +50,7 @@ export component WeighingIngredient inherits VerticalBox {
             color: ingredient-progress.done ? white.darker(0.2) : white;
             animate color { duration: 250ms; easing: ease-in-out; }
             line-width: 2px;
+            font-size: 40px;
         }
 
         StrikethroughText {
@@ -58,6 +59,7 @@ export component WeighingIngredient inherits VerticalBox {
             color: ingredient-progress.done ? white.darker(0.2) : white;
             animate color { duration: 250ms; easing: ease-in-out; }
             line-width: 2px;
+            font-size: 40px;
         }
     }
 }
@@ -107,18 +109,20 @@ export component WeighingContainer inherits Rectangle {
                 } else {
                     ScaleControls.zero();
                 }
-                accept
-            } else {
-                reject
             }
+            accept
         }
+
         key-released(event) => {
             if (event.text == Key.RightArrow) {
                 next();
                 ScaleControls.zero();
-                accept
-            } else {
+            }
+            // HACK
+            if (event.text == Key.LeftArrow) {
                 reject
+            } else {
+                accept
             }
         }
     }

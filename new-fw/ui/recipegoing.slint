@@ -51,10 +51,12 @@ export component RecipeGoing inherits Rectangle {
                 } else {
                     back();
                 }
-                accept
-            } else {
-                reject
             }
+            accept
+        }
+
+        key-pressed(event) => {
+            accept
         }
 
     	HorizontalLayout {

@@ -21,16 +21,16 @@ export component RecipeList inherits ScrollView {
         key-released(event) => {
             if (event.text == Key.UpArrow) {
                 selected-recipe = max(0, selected-recipe - 1);
-                accept
             } else if (event.text == Key.DownArrow) {
                 selected-recipe = min(recipes.length - 1, selected-recipe + 1);
-                accept
             } else if (event.text == Key.RightArrow) {
                 recipe-focused();
-                accept
-            } else {
-                reject
             }
+            accept
+        }
+
+        key-pressed(event) => {
+            accept
         }
     }
 
@@ -63,6 +63,7 @@ export component RecipeList inherits ScrollView {
                 Text {
                     color: white;
                     text: recipe.name;
+                    font-size: 40px;
                 }
             }
         }
