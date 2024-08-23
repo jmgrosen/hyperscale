@@ -2865,7 +2865,7 @@ dependencies = [
 [[package]]
 name = "t-display-s3-amoled"
 version = "0.1.0"
-source = "git+https://github.com/jmgrosen/t-display-s3-amoled-rs?rev=89e8f07#89e8f07b53bb087ecf515727aa9d824a5672216d"
+source = "git+https://github.com/jmgrosen/t-display-s3-amoled-rs?rev=0d67125#0d67125216d9f8c4b8e61a91e2769a39cec18c3a"
 dependencies = [
  "embedded-graphics",
  "embedded-hal 1.0.0",

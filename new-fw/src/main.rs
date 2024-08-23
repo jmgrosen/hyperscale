@@ -39,6 +39,7 @@ use nb::block;
 use heapless::spsc::{Queue, Producer};
 use debouncr::{DebouncerStateful, Edge, Repeat6, debounce_stateful_6};
 
+use slint::platform::software_renderer::RenderingRotation;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, Rgb565Pixel, TargetPixel, PremultipliedRgbaColor};
 use slint::platform::{software_renderer as renderer, Platform, WindowEvent, Key};
 use slint::{Model, PhysicalSize};
@@ -255,18 +256,6 @@ fn cast_pixel_buffer(b: &[Rgb565PixelFlipped]) -> &[u8] {
     unsafe { slice::from_raw_parts(b.as_ptr() as *const u8, b.len() * 2) }
 }
 
-struct FramebufLiner {
-    framebuf: [Rgb565PixelFlipped; 536 * 240],
-}
-
-impl renderer::LineBufferProvider for &mut FramebufLiner {
-    type TargetPixel = Rgb565PixelFlipped;
-
-    fn process_line(&mut self, line: usize, range: core::ops::Range<usize>, render_fn: impl FnOnce(&mut [Self::TargetPixel])) {
-        render_fn(&mut self.framebuf[(line * 536 + range.start)..(line * 536 + range.end)]);
-    }
-}
-
 struct ScaleState {
     zero: i32,
         val: i32,
@@ -428,6 +417,8 @@ fn main() -> ! {
 
     let encoder_button = Input::new(io.pins.gpio3, Pull::Up);
     let back_button = Input::new(io.pins.gpio10, Pull::Up);
+
+    let mut tearing_effect = Input::new(io.pins.gpio9, Pull::None);
     
     let timer00 = timer_group0.timer0;
     critical_section::with(|cs| {
@@ -485,7 +476,7 @@ fn main() -> ! {
     let (_tx_buffer, tx_descriptors, _rx_buffer, rx_descriptors) = dma_buffers!(16384, 0);
     let spi = Spi::new_half_duplex(
         peripherals.SPI2, // use spi2 host
-        80_u32.MHz(), // max 75MHz
+        80_u32.MHz(), // max 80MHz
         hal::spi::SpiMode::Mode0,
         &clocks,
     )
@@ -507,7 +498,7 @@ fn main() -> ! {
     display.reset(&mut rst, &mut delay).unwrap();
     display.init(&mut delay).unwrap();
     display
-        .set_orientation(Orientation::Landscape)
+        .set_orientation(Orientation::Portrait)
         .unwrap();
 
     println!("display init ok");
@@ -523,7 +514,7 @@ fn main() -> ! {
     let ui = AppWindow::new().unwrap();
     let _ui_handle = ui.as_weak();
 
-    let mut frame_buffer = FramebufLiner { framebuf: [Rgb565PixelFlipped(0); 536*240] };
+    let mut framebuf = [Rgb565PixelFlipped(0); 536*240];
 
     let scale_ref = scale.clone();
     ui.global::<ScaleControls>().on_zero(move || {
@@ -592,15 +583,23 @@ fn main() -> ! {
 
         // Draw the scene if something needs to be drawn.
         window.draw_if_needed(|renderer| {
+            renderer.set_rendering_rotation(RenderingRotation::Rotate90);
             // renderer.render_by_line(&mut wrapper);
             let before_render = SystemTimer::now();
-            renderer.render(&mut frame_buffer.framebuf[..], 536);
+            renderer.render(&mut framebuf[..], 240);
             // renderer.render_by_line(&mut frame_buffer);
             let after_render = SystemTimer::now();
-            let _res = unsafe { display.fill_with_framebuffer(cast_pixel_buffer(&frame_buffer.framebuf[..])) };
+            while tearing_effect.is_high() { }
+            while tearing_effect.is_low() { }
+            let after_wait = SystemTimer::now();
+            let _res = unsafe { display.fill_with_framebuffer(cast_pixel_buffer(&framebuf[..])) };
             let after_fill = SystemTimer::now();
-            // println!("render: {}us", ((after_render - before_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
-            // println!("fill: {}us", ((after_fill - after_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND);
+            println!(
+                "render: {}us, wait: {}us, fill: {}us",
+                ((after_render - before_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
+                ((after_wait - after_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
+                ((after_fill - after_wait) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
+            );
         });
 
         if !window.has_active_animations() {
