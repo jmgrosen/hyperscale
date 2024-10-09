@@ -19,6 +19,7 @@ export component RecipesGoing inherits Rectangle {
             recipes: recipes;
             recipe-focused => {
                 focused = true;
+                recipe-going.recipe-progress = recipe-progresses[recipe-list.selected-recipe];
                 recipe-going.focus();
             }
         }

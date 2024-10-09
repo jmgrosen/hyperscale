@@ -41,15 +41,33 @@ export component AppWindow inherits Window {
 		recipe,
 	];
 	property<[IngredientProgress]> ingredient-progresses: [
-		{ done: true, amount: 0.229 },
-		{ done: true, amount: 0.119 },
+		{ done: false, amount: 0.229 },
+		{ done: false, amount: 0.119 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+	];
+	property<[IngredientProgress]> ingredient-progresses2: [
+		{ done: false, amount: 0.229 },
+		{ done: false, amount: 0.119 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+		{ done: false, amount: 0 },
+	];
+	property<[IngredientProgress]> ingredient-progresses3: [
+		{ done: false, amount: 0.229 },
+		{ done: false, amount: 0.119 },
 		{ done: false, amount: 0 },
 		{ done: false, amount: 0 },
 		{ done: false, amount: 0 },
 		{ done: false, amount: 0 },
 	];
 	property<RecipeProgress> recipe-progress: { scale-factor: 1.0, ingredient-progresses: ingredient-progresses };
-	in-out property<[RecipeProgress]> recipe-progresses: [recipe-progress, recipe-progress, recipe-progress];
+	property<RecipeProgress> recipe-progress2: { scale-factor: 1.0, ingredient-progresses: ingredient-progresses2 };
+	property<RecipeProgress> recipe-progress3: { scale-factor: 1.0, ingredient-progresses: ingredient-progresses3 };
+	in-out property<[RecipeProgress]> recipe-progresses: [recipe-progress, recipe-progress2, recipe-progress3];
     background: black;
 
     forward-focus: recipes-going;
