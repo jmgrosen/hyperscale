@@ -353,6 +353,50 @@ fn pasta_dough() -> Recipe {
     }
 }
 
+fn poolish_bread() -> Recipe {
+    Recipe {
+        name: "Poolish Bread".into(),
+        ingredients: [
+            ingredient("flour", 0.5),
+            ingredient("yeast", 0.0004),
+            ingredient("water (80F)", 0.5),
+            ingredient("flour", 0.5),
+            ingredient("salt", 0.021),
+            ingredient("yeast", 0.003),
+            ingredient("water (105F)", 0.25),
+        ].into(),
+    }
+}
+
+fn focaccia() -> Recipe {
+    Recipe {
+        name: "Focaccia".into(),
+        ingredients: [
+            ingredient("flour", 0.5),
+            ingredient("salt", 0.01),
+            ingredient("yeast", 0.004),
+            ingredient("water (roomtemp)", 0.4),
+            ingredient("olive oil", 0.02),
+            ingredient("olive oil", 0.028),
+            ingredient("olive oil", 0.02),
+        ].into(),
+    }
+}
+
+fn kouign_amann() -> Recipe {
+    Recipe {
+        name: "Kouign Amann".into(),
+        ingredients: [
+            ingredient("flour", 0.213),
+            ingredient("salt", 0.0032),
+            ingredient("yeast", 0.0016),
+            ingredient("water (75F)", 0.145),
+            ingredient("salted butter", 0.134),
+            ingredient("sugar", 0.156),
+        ].into(),
+    }
+}
+
 fn progress_for_recipe(recipe: &Recipe) -> RecipeProgress {
     RecipeProgress {
         scale_factor: 1.0,
@@ -527,6 +571,9 @@ fn main() -> ! {
         choux(),
         creme_pat(),
         pasta_dough(),
+        poolish_bread(),
+        focaccia(),
+        kouign_amann(),
     ];
     let progresses = recipes.iter().map(progress_for_recipe).collect::<Vec<_>>()[..].into();
     ui.set_recipes(recipes.into());
