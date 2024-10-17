@@ -1,3 +1,6 @@
+// Copyright (C) Jessie Grosen 2024
+// SPDX-License-Identifier: MIT
+
 #![no_std]
 #![no_main]
 
@@ -397,6 +400,38 @@ fn kouign_amann() -> Recipe {
     }
 }
 
+fn pie_dough() -> Recipe {
+    Recipe {
+        name: "Pie Dough".into(),
+        ingredients: [
+            ingredient("low-protein APF", 0.225),
+            ingredient("sugar", 0.015),
+            ingredient("salt", 0.004),
+            ingredient("unsalted butter", 0.225),
+            ingredient("cold tap water", 0.115),
+        ].into(),
+    }
+}
+
+fn butternut_pie() -> Recipe {
+    Recipe {
+        name: "Butternut Pie".into(),
+        ingredients: [
+            ingredient("butternut puree", 0.395),
+            ingredient("condensed milk", 0.680),
+            ingredient("light brown sugar", 0.115),
+            ingredient("vanilla extract", 0.015),
+            ingredient("3/2tsp ground ginger", 0.001),
+            ingredient("3/2tsp ground cinnamon", 0.001),
+            ingredient("1/4tsp grated nutmeg", 0.001),
+            ingredient("salt", 0.001),
+            ingredient("1/8tsp ground cloves", 0.001),
+            ingredient("unsalted butter", 0.030),
+            ingredient("eggs", 0.145),
+        ].into(),
+    }
+}
+
 fn progress_for_recipe(recipe: &Recipe) -> RecipeProgress {
     RecipeProgress {
         scale_factor: 1.0,
@@ -574,6 +609,8 @@ fn main() -> ! {
         poolish_bread(),
         focaccia(),
         kouign_amann(),
+        pie_dough(),
+        butternut_pie(),
     ];
     let progresses = recipes.iter().map(progress_for_recipe).collect::<Vec<_>>()[..].into();
     ui.set_recipes(recipes.into());

@@ -1,3 +1,6 @@
+// Copyright (C) Jessie Grosen 2024
+// SPDX-License-Identifier: CERN-OHL-P-2.0
+
 include <BOSL2/std.scad>
 include <BOSL2/rounding.scad>
 

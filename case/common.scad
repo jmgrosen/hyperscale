@@ -1,3 +1,6 @@
+// Copyright (C) Jessie Grosen 2024
+// SPDX-License-Identifier: CERN-OHL-P-2.0
+
 FRONT_BOTTOM_WIDTH = 117;
 ROUNDING_START_WIDTH = 115;
 BACK_ROUNDING_RADIUS = 15;
