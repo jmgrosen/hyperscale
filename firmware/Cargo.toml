@@ -26,7 +26,7 @@ esp-alloc = { version = "0.3.0" }
 embedded-hal-1 = { package = "embedded-hal", version = "1.0.0" }
 embedded-graphics = { version = "0.8.0" }
 t-display-s3-amoled = { git = "https://github.com/jmgrosen/t-display-s3-amoled-rs", rev = "0d67125" }
-slint = { version = "1.7", default-features = false, features = [
+slint = { version = "1.9", default-features = false, features = [
     "compat-1-2",
     "libm",
     "unsafe-single-threaded",
@@ -43,7 +43,7 @@ heapless = "0.8"
 debouncr = "0.2.2"
 
 [build-dependencies]
-slint-build = "1.7"
+slint-build = "1.9"
 
 [features]
 default = []
