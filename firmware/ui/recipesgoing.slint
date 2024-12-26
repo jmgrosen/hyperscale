@@ -19,6 +19,7 @@ export component RecipesGoing inherits Rectangle {
         animate x { duration: 400ms; easing: ease-in-out; }
 
         recipe-list := RecipeList {
+            current-weight: current-weight;
             recipes: recipes;
             recipe-focused => {
                 focused = true;

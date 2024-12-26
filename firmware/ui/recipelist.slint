@@ -6,26 +6,76 @@ import { HorizontalBox, ScrollView , GridBox, VerticalBox} from "std-widgets.sli
 import { Ingredient, IngredientProgress, Recipe } from "recipe.slint";
 import { Palette } from "styling.slint";
 import { StrikethroughText } from "strikethrough.slint";
+import { ScaleControls } from "recipegoing.slint";
+
+enum SelectionType {
+    weight,
+    recipe,
+}
+
+// if only we had algebraic data types
+// also can't name this just "Selection" due to some Slint compiler bug involving an enum having the same name in a different file, it seems...
+struct RLSelection {
+    type: SelectionType,
+    subidx: int,
+}
+
+global RLSelection {
+    public pure function next(num-recipes: int, sel: RLSelection) -> RLSelection {
+        if (num-recipes == 0) {
+            {type: SelectionType.weight, subidx: 0}
+        } else if (sel.type == SelectionType.weight) {
+            {type: SelectionType.recipe, subidx: 0}
+        } else if (sel.subidx == num-recipes - 1) {
+            sel
+        } else {
+            {type: SelectionType.recipe, subidx: sel.subidx + 1}
+        }
+    }
+
+    public pure function prev(num-recipes: int, sel: RLSelection) -> RLSelection {
+        if (sel.type == SelectionType.weight) {
+            sel
+        } else if (sel.subidx == 0) {
+            {type: SelectionType.weight, subidx: 0}
+        } else {
+            {type: SelectionType.recipe, subidx: sel.subidx - 1}
+        }
+    }
+
+    public pure function is-recipe-selected(sel: RLSelection, recipe-idx: int) -> bool {
+        sel.type == SelectionType.recipe && sel.subidx == recipe-idx
+    }
+}
 
 export component RecipeList inherits ScrollView {
+    in property<float> current-weight;
     in property<[Recipe]> recipes;
-    out property<int> selected-recipe;
+    out property<int> selected-recipe: selection.subidx;
     callback recipe-focused();
 
     property<length> item-height : 56px;
+    property<RLSelection> selection: {type: SelectionType.weight, subidx: 0};
 
     width: 536px;
     height: 240px;
-    viewport-y: -recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
+    // TODO: pull out this logic somewhere else somehow?
+    viewport-y:
+      selection.type == SelectionType.weight
+      ? self.height / 2 - weight-text.height / 2
+      // ? 0
+      : -weight-text.height - recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
+    // viewport-y: -recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
     animate viewport-y { duration: 250ms; easing: ease-in-out; }
+    vertical-scrollbar-policy: always-off;
 
     forward-focus: focus-scope;
     focus-scope := FocusScope {
         key-released(event) => {
             if (event.text == Key.UpArrow) {
-                selected-recipe = max(0, selected-recipe - 1);
+                selection = RLSelection.prev(recipes.length, selection);
             } else if (event.text == Key.DownArrow) {
-                selected-recipe = min(recipes.length - 1, selected-recipe + 1);
+                selection = RLSelection.next(recipes.length, selection);
             } else if (event.text == Key.RightArrow) {
                 recipe-focused();
             }
@@ -33,12 +83,30 @@ export component RecipeList inherits ScrollView {
         }
 
         key-pressed(event) => {
+            // TODO: move this logic out...
+            if (selection.type == SelectionType.weight && event.text == "d") {
+                ScaleControls.zero();
+            }
             accept
         }
     }
 
     VerticalLayout {
         width: parent.width;
+
+        weight-text := Rectangle {
+            background: selection.type == SelectionType.weight ? Palette.primary : black;
+            Text {
+                text: "\{round(current-weight * 1000.0)}g";
+                width: parent.width;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                font-size: 128px;
+                font-weight: 800;
+                font-family: "Fira Mono";
+                color: white;
+            }
+        }
 
         recipes-text := VerticalBox {
             width: parent.width;
@@ -54,7 +122,7 @@ export component RecipeList inherits ScrollView {
         for recipe[idx] in recipes : Rectangle {
             width: parent.width;
             height: item-height;
-            background: idx == selected-recipe ? Palette.primary : black;
+            background: RLSelection.is-recipe-selected(selection, idx) ? Palette.primary : black;
 
             HorizontalBox {
                 width: parent.width;
