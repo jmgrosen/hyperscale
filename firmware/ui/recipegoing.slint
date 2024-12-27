@@ -6,13 +6,13 @@ import { Button, VerticalBox, AboutSlint, Slider, StandardButton, CheckBox , Hor
 import { WeighingIngredient, WeighingContainer } from "weighingingredient.slint";
 import { Ingredient, IngredientProgress, Recipe, RecipeProgress } from "recipe.slint";
 import { IngredientList } from "ingredientlist.slint";
-import { ScaleControls } from "scale.slint";
+import { ScaleControls, ScaleStatus } from "scale.slint";
 
 // weird syntax
 export { ScaleControls }
 
 export component RecipeGoing inherits Rectangle {
-    in property<float> current-weight: 0.1;
+    in property<ScaleStatus> current-weight: {valid: true, weight: 0.1};
     in-out property<bool> focused: false;
     in-out property<int> selected-ingredient: 0;
     in property<Recipe> recipe: {
@@ -103,7 +103,7 @@ export component RecipeGoing inherits Rectangle {
 
     	    // scale view
     	    weighing-ingredient := WeighingContainer {
-	            current-weight <=> current-weight;
+	            current-weight: current-weight;
     	        ingredients: recipe.ingredients;
 				ingredient-progresses: recipe-progress.ingredient-progresses;
                 update-progress => {

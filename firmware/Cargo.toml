@@ -37,7 +37,7 @@ tinygif = "0.0.3"
 rotary-encoder-hal = { git = "https://github.com/flyaruu/rotary-encoder-hal", rev = "b8c5bae", features = ["table-decoder", "embedded-hal-1"] }
 critical-section = { version = "1.1.2" }
 
-nau7802 = { git = "https://github.com/jmgrosen/nau7802-rs", rev = "63b17fe" }
+nau7802 = { git = "https://github.com/jmgrosen/nau7802-rs", rev = "d56abab" }
 nb = "1"
 heapless = "0.8"
 debouncr = "0.2.2"

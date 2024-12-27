@@ -6,7 +6,7 @@ import { HorizontalBox, ScrollView , GridBox, VerticalBox} from "std-widgets.sli
 import { Ingredient, IngredientProgress, Recipe } from "recipe.slint";
 import { Palette } from "styling.slint";
 import { StrikethroughText } from "strikethrough.slint";
-import { ScaleControls } from "recipegoing.slint";
+import { ScaleControls, ScaleStatus, ScaleStatusUtils } from "scale.slint";
 
 enum SelectionType {
     weight,
@@ -49,7 +49,7 @@ global RLSelection {
 }
 
 export component RecipeList inherits ScrollView {
-    in property<float> current-weight;
+    in property<ScaleStatus> current-weight;
     in property<[Recipe]> recipes;
     out property<int> selected-recipe: selection.subidx;
     callback recipe-focused();
@@ -97,7 +97,7 @@ export component RecipeList inherits ScrollView {
         weight-text := Rectangle {
             background: selection.type == SelectionType.weight ? Palette.primary : black;
             Text {
-                text: "\{round(current-weight * 1000.0)}g";
+                text: ScaleStatusUtils.to-text(current-weight);
                 width: parent.width;
                 horizontal-alignment: right;
                 vertical-alignment: center;

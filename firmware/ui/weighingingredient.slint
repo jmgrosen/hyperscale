@@ -5,18 +5,21 @@ import { VerticalBox, ProgressIndicator, ScrollView } from "std-widgets.slint";
 
 import { Ingredient, IngredientUtils, IngredientProgress, ExampleRecipe } from "recipe.slint";
 import { DoubleProgressBar } from "progressbar.slint";
-import { ScaleControls } from "scale.slint";
+import { ScaleControls, ScaleStatus, ScaleStatusUtils } from "scale.slint";
 import { StrikethroughText } from "strikethrough.slint";
 import { Palette } from "styling.slint";
 
 export component WeighingIngredient inherits VerticalBox {
-    in property<float> current-weight: 0.1;
+    in property<ScaleStatus> current-weight: {valid: true, weight: 0.1};
     in property<Ingredient> ingredient: { name: "light brown sugar", amount: 0.234 };
     in property<IngredientProgress> ingredient-progress: { done: false, amount: 0 };
     callback done();
     callback undone();
 
-    private property<float> display-weight: ingredient-progress.done ? ingredient-progress.amount : current-weight;
+    private property<ScaleStatus> display-status:
+        ingredient-progress.done
+        ? {valid: true, weight: ingredient-progress.amount}
+        : current-weight;
 
     width: 536px;
     height: 240px;
@@ -25,14 +28,14 @@ export component WeighingIngredient inherits VerticalBox {
 
     GridLayout {
         DoubleProgressBar {
-            progress: display-weight / ingredient.amount;
+            progress: display-status.valid ? display-status.weight / ingredient.amount : 0;
             bar-brush: ingredient-progress.done ? Palette.done : Palette.primary;
             animate bar-brush { duration: 250ms; easing: ease-in-out; }
             row: 0;
             col: 0;
         }
         Text {
-            text: "\{round(display-weight * 1000.0)}g";
+            text: ScaleStatusUtils.to-text(display-status);
             row: 0;
             col: 0;
             horizontal-alignment: right;
@@ -70,7 +73,7 @@ export component WeighingIngredient inherits VerticalBox {
 export component WeighingContainer inherits Rectangle {
     in property<[Ingredient]> ingredients: ExampleRecipe.ingredients;
     in-out property<[IngredientProgress]> ingredient-progresses: ExampleRecipe.progresses;
-    in property<float> current-weight: 0.1;
+    in property<ScaleStatus> current-weight: {valid: true, weight: 0.1};
     in-out property<int> selected: 0;
     in property<float> recipe-scale-factor: 1.0;
     callback update-progress();
@@ -92,14 +95,16 @@ export component WeighingContainer inherits Rectangle {
     animate y { duration: 500ms; easing: ease-in-out; }
 
     function next() {
-        if (!ingredient-progresses[selected].done) {
-            ingredient-progresses[selected].done = true;
-            ingredient-progresses[selected].amount = current-weight;
-            update-progress();
-        }
-        if (selected < ingredients.length - 1) {
-            selected = selected + 1;
-            active1 = !active1;
+        if (current-weight.valid) {
+            if (!ingredient-progresses[selected].done) {
+                ingredient-progresses[selected].done = true;
+                ingredient-progresses[selected].amount = current-weight.weight;
+                update-progress();
+            }
+            if (selected < ingredients.length - 1) {
+                selected = selected + 1;
+                active1 = !active1;
+            }
         }
     }
 

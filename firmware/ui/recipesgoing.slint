@@ -4,11 +4,12 @@
 import { Recipe, RecipeProgress } from "recipe.slint";
 import { RecipeList } from "recipelist.slint";
 import { RecipeGoing } from "recipegoing.slint";
+import { ScaleStatus } from "scale.slint";
 
 export component RecipesGoing inherits Rectangle {
     in property<[Recipe]> recipes;
     in-out property<[RecipeProgress]> recipe-progresses;
-    in property<float> current-weight;
+    in property<ScaleStatus> current-weight;
 
     property<bool> focused : false;
 

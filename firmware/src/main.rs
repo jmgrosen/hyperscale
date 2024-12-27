@@ -8,6 +8,7 @@ extern crate alloc;
 
 use core::cell::RefCell;
 use core::iter;
+use core::mem;
 use core::slice;
 
 use alloc::boxed::Box;
@@ -18,7 +19,9 @@ use critical_section::Mutex;
 use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::prelude::{DrawTarget, Point, Size};
 use embedded_graphics::primitives::Rectangle;
+use embedded_hal_1::delay::DelayNs;
 use embedded_hal_1::digital::InputPin;
+use embedded_hal_1::i2c::I2c as I2cTrait;
 use esp_backtrace as _;
 use esp_println::println;
 use hal::peripherals::TIMG0;
@@ -36,6 +39,7 @@ use hal::{
 };
 use hal::spi::master::prelude::*;
 
+use nau7802::AfeCalibrationStatus;
 use rotary_encoder_hal::{Direction, Rotary, DefaultPhase};
 use nau7802::Nau7802;
 use nb::block;
@@ -259,27 +263,61 @@ fn cast_pixel_buffer(b: &[Rgb565PixelFlipped]) -> &[u8] {
     unsafe { slice::from_raw_parts(b.as_ptr() as *const u8, b.len() * 2) }
 }
 
-struct ScaleState {
-    zero: i32,
-        val: i32,
+#[derive(Default)]
+enum Scale<I: I2cTrait> {
+    #[default]
+    Empty,
+    Unconnected(I),
+    Calibrating(Nau7802<I>),
+    Running { adc: Nau7802<I>, zero: i32, val: i32 },
 }
 
-impl ScaleState {
-    fn new(val: i32) -> ScaleState {
-            ScaleState { zero: val, val }
+impl<I: I2cTrait> Scale<I> {
+    fn step_inner(self, wait: &mut impl DelayNs) -> (Self, Option<f32>) {
+        use Scale::*;
+        match self {
+            Empty =>
+                // this shouldn't happen :)
+                (Empty, None),
+            Unconnected(i2c) =>
+                match Nau7802::new(i2c, wait) {
+                    Ok(adc) =>
+                        (Calibrating(adc), None),
+                    Err((_, i2c)) =>
+                        (Unconnected(i2c), None),
+                },
+            Calibrating(mut adc) =>
+                if let Ok(AfeCalibrationStatus::Success) = adc.poll_afe_calibration_status() {
+                    if let Ok(val) = adc.read() {
+                        (Running { adc, zero: val, val }, Some(0.))
+                    } else {
+                        (Calibrating(adc), None)
+                    }
+                } else {
+                    (Calibrating(adc), None)
+                },
+            Running { mut adc, zero, val } => {
+                let new_val = adc.read().unwrap_or(val);
+                (Running { adc, zero, val: new_val }, Some(((new_val - zero) as f32) * ONE_KG))
+            },
+        }
     }
 
-    fn update(&mut self, val: i32) {
-            self.val = val;
-        }
+    /// Steps the connecting/calibrating/running state
+    /// machine. Returns the most recent reading if we have calibrated
+    /// successfully.
+    fn step(&mut self, wait: &mut impl DelayNs) -> Option<f32> {
+        let real_self = mem::take(self);
+        let (new_self, result) = real_self.step_inner(wait);
+        let _ = mem::replace(self, new_self);
+        result
+    }
 
     fn rezero(&mut self) {
-            self.zero = self.val;
+        if let &mut Scale::Running { ref mut zero, val, .. } = self {
+            *zero = val;
         }
-
-    fn in_kg(&self) -> f32 {
-            ((self.val - self.zero) as f32) * ONE_KG
-        }
+    }
 }
 
 fn ingredient(name: &str, amount: f32) -> Ingredient {
@@ -306,13 +344,20 @@ fn vegan_creme_pat() -> Recipe {
     Recipe {
         name: "Vegan Creme Pat".into(),
         ingredients: [
-            ingredient("soy milk", 0.243),
-            ingredient("vanilla extract", 0.010),
-            ingredient("salt", 0.001),
-            ingredient("corn starch", 0.016),
-            ingredient("sugar", 0.050),
-            ingredient("Just Egg", 0.083),
-            ingredient("vegan butter", 0.042),
+            // ingredient("soy milk", 0.243),
+            // ingredient("vanilla extract", 0.010),
+            // ingredient("salt", 0.001),
+            // ingredient("corn starch", 0.016),
+            // ingredient("sugar", 0.050),
+            // ingredient("Just Egg", 0.083),
+            // ingredient("vegan butter", 0.042),
+            ingredient("soy milk", 0.486),
+            ingredient("vanilla extract", 0.020),
+            ingredient("salt", 0.002),
+            ingredient("corn starch", 0.032),
+            ingredient("sugar", 0.100),
+            ingredient("Just Egg", 0.166),
+            ingredient("vegan butter", 0.084)
         ].into(),
     }
 }
@@ -517,8 +562,7 @@ fn main() -> ! {
     });
 
     let i2c = I2C::new(peripherals.I2C0, io.pins.gpio43, io.pins.gpio44, 100u32.kHz(), &clocks, None);
-    let mut scale_adc = Nau7802::new(i2c, &mut delay).unwrap();
-    let scale = Rc::new(RefCell::new(ScaleState::new(block!(scale_adc.read()).unwrap())));
+    let scale = Rc::new(RefCell::new(Scale::Unconnected(i2c)));
 
     println!("init display");
 
@@ -649,14 +693,12 @@ fn main() -> ! {
             }
         }
 
-        if let Ok(val) = scale_adc.read() {
-            let mut scale = scale.borrow_mut();
-            scale.update(val);
-            let cur_weight = scale.in_kg();
-            // println!("scale: {}", cur_weight);
-        }
-        // TODO: optimize
-        ui.set_current_weight(scale.borrow().in_kg());
+        let cur_weight = if let Some(weight) = scale.borrow_mut().step(&mut delay) {
+            ScaleStatus { valid: true, weight }
+        } else {
+            ScaleStatus { valid: false, weight: 0. }
+        };
+        ui.set_current_weight(cur_weight);
 
         slint::platform::update_timers_and_animations();
 
