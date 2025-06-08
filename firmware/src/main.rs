@@ -42,7 +42,6 @@ use hal::spi::master::prelude::*;
 use nau7802::AfeCalibrationStatus;
 use rotary_encoder_hal::{Direction, Rotary, DefaultPhase};
 use nau7802::Nau7802;
-use nb::block;
 use heapless::spsc::{Queue, Producer};
 use debouncr::{DebouncerStateful, Edge, Repeat6, debounce_stateful_6};
 
@@ -380,6 +379,8 @@ fn creme_pat() -> Recipe {
     Recipe {
         name: "Creme Pat".into(),
         ingredients: [
+            ingredient("milk", 0.455),
+            ingredient("vanilla bean", 0.001),
             ingredient("sugar", 0.115),
             ingredient("corn starch", 0.030),
             ingredient("salt", 0.001),
