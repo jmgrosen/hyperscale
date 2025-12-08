@@ -8,25 +8,25 @@ repository = "https://github.com/jmgrosen/smart-scale"
 description = "Firmware for my recipe-guiding scale"
 
 [dependencies]
-hal = { package = "esp-hal", version = "0.19.0", features = [
+esp-hal = { version = "1.0.0-beta.1", features = [
     "esp32s3",
-    "opsram-8m",
-    "embedded-hal",
-    # "psram-80mhz",
+    "unstable",
+    "psram",
 ] }
-esp-backtrace = { version = "0.7.0", features = [
+esp-backtrace = { version = "0.16.0", features = [
     "esp32s3",
     "panic-handler",
     "exception-handler",
-    "print-uart",
+    "println",
 ] }
-esp-println = { version = "0.5.0", features = ["esp32s3"] }
-esp-alloc = { version = "0.3.0" }
+esp-println = { version = "0.14.0", features = ["esp32s3"] }
+esp-alloc = { version = "0.8.0" }
 
 embedded-hal-1 = { package = "embedded-hal", version = "1.0.0" }
 embedded-graphics = { version = "0.8.0" }
-t-display-s3-amoled = { git = "https://github.com/jmgrosen/t-display-s3-amoled-rs", rev = "0d67125" }
-slint = { version = "1.9", default-features = false, features = [
+t-display-s3-amoled = { path = "/Users/jessie/projects/t-display-s3-amoled-rs" }
+#git = "https://github.com/jmgrosen/t-display-s3-amoled-rs", rev = "0d67125"
+slint = { version = "1.11", default-features = false, features = [
     "compat-1-2",
     "libm",
     "unsafe-single-threaded",

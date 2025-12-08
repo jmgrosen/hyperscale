@@ -16,28 +16,21 @@ use alloc::rc::Rc;
 use alloc::vec::Vec;
 
 use critical_section::Mutex;
-use embedded_graphics::pixelcolor::raw::RawU16;
-use embedded_graphics::prelude::{DrawTarget, Point, Size};
-use embedded_graphics::primitives::Rectangle;
 use embedded_hal_1::delay::DelayNs;
 use embedded_hal_1::digital::InputPin;
 use embedded_hal_1::i2c::I2c as I2cTrait;
 use esp_backtrace as _;
 use esp_println::println;
-use hal::peripherals::TIMG0;
-use hal::spi::master::Spi;
-use hal::timer::systimer::SystemTimer;
-use hal::timer::timg::{Timer, Timer0, TimerInterrupts};
-use hal::{
-    dma_buffers,
-    clock::{ClockControl, CpuClock}, dma::DmaPriority, dma::Dma, gpio::NO_PIN, peripherals::Peripherals,
-    prelude::*, timer::timg::TimerGroup, delay::Delay, rtc_cntl::Rtc,
-    gpio::{Io, Input, Output, Level, Gpio1, Gpio2, Gpio3, Gpio10, Pull, self},
-    i2c::I2C,
-    system::SystemControl,
-    psram,
+use esp_hal::{
+    clock::CpuClock,
+    timer::PeriodicTimer,
+    timer::timg::TimerGroup, delay::Delay, rtc_cntl::Rtc,
+    gpio::{Io, Input, InputConfig, Output, OutputConfig, Level, Pull, self},
+    i2c::master::{I2c, Config as I2cConfig},
+    spi::{Mode as SpiMode, master::{Spi, Config as SpiConfig}},
+    time::{self, Rate},
+    handler,
 };
-use hal::spi::master::prelude::*;
 
 use nau7802::AfeCalibrationStatus;
 use rotary_encoder_hal::{Direction, Rotary, DefaultPhase};
@@ -52,26 +45,6 @@ use slint::{Model, PhysicalSize};
 
 use t_display_s3_amoled::rm67162::dma::RM67162Dma;
 use t_display_s3_amoled::rm67162::Orientation;
-
-#[global_allocator]
-static ALLOCATOR: esp_alloc::EspHeap = esp_alloc::EspHeap::empty();
-
-/*
-fn init_heap() {    
-    const HEAP_SIZE: usize = 80 * 1024;
-    static mut HEAP: MaybeUninit<[u8; HEAP_SIZE]> = MaybeUninit::uninit();
-
-    unsafe {
-        ALLOCATOR.init(HEAP.as_mut_ptr() as *mut u8, HEAP_SIZE);
-    }
-}
- */
-
-fn init_psram_heap() {
-    unsafe {
-        ALLOCATOR.init(psram::psram_vaddr_start() as *mut u8, psram::PSRAM_BYTES);
-    }
-}
 
 #[derive(Debug, Clone, Copy)]
 enum ButtonEvent {
@@ -130,16 +103,15 @@ enum Event {
 }
 
 struct InterruptResources {
-    encoder: Rotary<Input<'static, Gpio1>, Input<'static, Gpio2>, DefaultPhase>,
+    encoder: Rotary<Input<'static>, Input<'static>, DefaultPhase>,
     producer: Producer<'static, Event, 16>,
-    wheel_button: Button<Input<'static, Gpio3>>,
-    back_button: Button<Input<'static, Gpio10>>,
-    timer: Timer<Timer0<TIMG0>, hal::Blocking>,
+    wheel_button: Button<Input<'static>>,
+    back_button: Button<Input<'static>>,
+    timer: PeriodicTimer<'static, esp_hal::Blocking>,
 }
 
 static INTERRUPT_RESOURCES: Mutex<RefCell<Option<InterruptResources>>> = Mutex::new(RefCell::new(None));
 
-#[ram]
 #[handler]
 fn gpio_handler() {
     critical_section::with(|cs| {
@@ -158,24 +130,19 @@ fn gpio_handler() {
 
 const TIMER_PERIOD_MS: u64 = 5;
 
-#[ram]
 #[handler]
 fn timer0_handler() {
     critical_section::with(|cs| {
         let mut borrowed_resources = INTERRUPT_RESOURCES.borrow_ref_mut(cs);
         let resources = borrowed_resources.as_mut().unwrap();
 
+        resources.timer.clear_interrupt();
+
         if let Some(event) = resources.wheel_button.update() {
             let _ = resources.producer.enqueue(Event::WheelButton(event));
         }
         if let Some(event) = resources.back_button.update() {
             let _ = resources.producer.enqueue(Event::BackButton(event));
-        }
-
-        if resources.timer.is_interrupt_set() {
-            resources.timer.clear_interrupt();
-            resources.timer.load_value(TIMER_PERIOD_MS.millis()).unwrap();
-            resources.timer.start();
         }
     });
 }
@@ -198,8 +165,8 @@ impl Platform for Backend {
     }
 
     fn duration_since_start(&self) -> core::time::Duration {
-        core::time::Duration::from_millis(
-            SystemTimer::now() * 1_000 / SystemTimer::TICKS_PER_SECOND,
+        core::time::Duration::from_micros(
+            time::Instant::now().duration_since_epoch().as_micros()
         )
     }
 
@@ -209,6 +176,7 @@ impl Platform for Backend {
     }
 }
 
+/*
 struct DisplayWrapper<'a, CS> {
     display: &'a mut RM67162Dma<'a, CS>,
     line_buffer: &'a mut [Rgb565Pixel; 536],
@@ -239,6 +207,7 @@ where
         );
     }
 }
+*/
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
@@ -489,30 +458,20 @@ fn progress_for_recipe(recipe: &Recipe) -> RecipeProgress {
     }
 }
 
-#[hal::entry]
+#[esp_hal::main]
 fn main() -> ! {
     // init_heap();
-    println!("main!");
-    let peripherals = Peripherals::take();
-    psram::init_psram(peripherals.PSRAM);
-    init_psram_heap();
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let peripherals = esp_hal::init(config);
+
+    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
     println!("initted psram");
-    let system = SystemControl::new(peripherals.SYSTEM);
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
     // Disable the RTC and TIMG watchdog timers
-    let mut rtc = Rtc::new(peripherals.LPWR, None);
-    let timer_group0 = TimerGroup::new(
-        peripherals.TIMG0,
-        &clocks,
-        Some(TimerInterrupts { timer0: Some(timer0_handler), ..Default::default() }),
-    );
+    let mut rtc = Rtc::new(peripherals.LPWR);
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0);
     let mut wdt0 = timer_group0.wdt;
-    let timer_group1 = TimerGroup::new(
-        peripherals.TIMG1,
-        &clocks,
-        None,
-    );
+    let timer_group1 = TimerGroup::new(peripherals.TIMG1);
     let mut wdt1 = timer_group1.wdt;
     rtc.rwdt.disable();
     wdt0.disable();
@@ -520,7 +479,7 @@ fn main() -> ! {
     println!("Hello board!");
 
     // Set GPIO4 as an output, and set its state high initially.
-    let mut io = Io::new(peripherals.GPIO, peripherals.IO_MUX);
+    let mut io = Io::new(peripherals.IO_MUX);
     io.set_interrupt_handler(gpio_handler);
     // let mut led = io.pins.gpio38.into_push_pull_output();
     // let _button = io.pins.gpio21.into_pull_down_input();
@@ -529,96 +488,77 @@ fn main() -> ! {
 
     // Initialize the Delay peripheral, and use it to toggle the LED state in a
     // loop.
-    let mut delay = Delay::new(&clocks);
+    let mut delay = Delay::new();
 
     // set up rotary encoder
-    let mut pin_a = Input::new(io.pins.gpio1, Pull::Up);
-    let mut pin_b = Input::new(io.pins.gpio2, Pull::Up);
+    let pullup = InputConfig::default().with_pull(Pull::Up);
+    let mut pin_a = Input::new(peripherals.GPIO1, pullup);
+    let mut pin_b = Input::new(peripherals.GPIO2, pullup);
     let event_queue: &'static mut Queue<Event, 16> = {
         static mut Q: Queue<Event, 16> = Queue::new();
         unsafe { &mut Q }
     };
     let (event_producer, mut event_consumer) = event_queue.split();
 
-    let encoder_button = Input::new(io.pins.gpio3, Pull::Up);
-    let back_button = Input::new(io.pins.gpio10, Pull::Up);
+    let encoder_button = Input::new(peripherals.GPIO3, pullup);
+    let back_button = Input::new(peripherals.GPIO10, pullup);
 
-    let mut tearing_effect = Input::new(io.pins.gpio9, Pull::None);
+    let mut tearing_effect = Input::new(peripherals.GPIO9, InputConfig::default());
     
     let timer00 = timer_group0.timer0;
     critical_section::with(|cs| {
         pin_a.listen(gpio::Event::AnyEdge);
         pin_b.listen(gpio::Event::AnyEdge);
         let rotary = Rotary::new(pin_a, pin_b);
-        timer00.load_value(TIMER_PERIOD_MS.millis()).unwrap();
-        timer00.start();
-        timer00.listen();
+        let mut periodic_timer = PeriodicTimer::new(timer00);
+        periodic_timer.set_interrupt_handler(timer0_handler);
+        periodic_timer.enable_interrupt(true);
+        periodic_timer.start(time::Duration::from_millis(TIMER_PERIOD_MS)).unwrap();
         INTERRUPT_RESOURCES.borrow_ref_mut(cs).replace(InterruptResources {
             encoder: rotary,
             producer: event_producer,
             wheel_button: Button::new(encoder_button),
             back_button: Button::new(back_button),
-            timer: timer00,
+            timer: periodic_timer,
         });
     });
 
-    let i2c = I2C::new(peripherals.I2C0, io.pins.gpio43, io.pins.gpio44, 100u32.kHz(), &clocks, None);
+    let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(100));
+    let i2c = I2c::new(peripherals.I2C0, i2c_config).unwrap()
+        .with_sda(peripherals.GPIO43)
+        .with_scl(peripherals.GPIO44);
     let scale = Rc::new(RefCell::new(Scale::Unconnected(i2c)));
 
     println!("init display");
 
-    let sclk = io.pins.gpio47;
-    let rst = io.pins.gpio17;
-    let cs = io.pins.gpio6;
+    let sclk = peripherals.GPIO47;
+    let rst = peripherals.GPIO17;
+    let cs = peripherals.GPIO6;
 
-    let d0 = io.pins.gpio18;
-    let d1 = io.pins.gpio7;
-    let d2 = io.pins.gpio48;
-    let d3 = io.pins.gpio5;
+    let d0 = peripherals.GPIO18;
+    let d1 = peripherals.GPIO7;
+    let d2 = peripherals.GPIO48;
+    let d3 = peripherals.GPIO5;
 
-    let cs = Output::new(cs, Level::High);
+    let cs = Output::new(cs, Level::High, OutputConfig::default());
 
-    let mut rst = Output::new(rst, Level::Low);
+    let mut rst = Output::new(rst, Level::Low, OutputConfig::default());
 
-    let dma = Dma::new(peripherals.DMA);
-    let dma_channel = dma.channel0;
-
-    // Descriptors should be sized as (BUFFERSIZE / 4092) * 3
-    // let mut descriptors = [0u32; 12];
-    // let spi = Spi::new_half_duplex(
-    //     peripherals.SPI2, // use spi2 host
-    //     Some(sclk),
-    //     Some(d0),
-    //     Some(d1),
-    //     Some(d2),
-    //     Some(d3),
-    //     NO_PIN,
-    //     75_u32.MHz(), // max 75MHz
-    //     hal::spi::SpiMode::Mode0,
-    //     &clocks,
-    // )
-    let (_tx_buffer, tx_descriptors, _rx_buffer, rx_descriptors) = dma_buffers!(16384, 0);
-    let spi = Spi::new_half_duplex(
+    let spi = Spi::new(
         peripherals.SPI2, // use spi2 host
-        80_u32.MHz(), // max 80MHz
-        hal::spi::SpiMode::Mode0,
-        &clocks,
-    )
-    .with_pins(
-        Some(sclk),
-        Some(d0),
-        Some(d1),
-        Some(d2),
-        Some(d3),
-        NO_PIN,
-    )
-    .with_dma(
-        dma_channel.configure(false, DmaPriority::Priority0),
-        tx_descriptors,
-        rx_descriptors,
-    );
+        SpiConfig::default()
+            .with_frequency(Rate::from_mhz(75)) // max 75MHz
+            .with_mode(SpiMode::_0),
+        )
+        .unwrap()
+        .with_sck(sclk)
+        .with_sio0(d0)
+        .with_sio1(d1)
+        .with_sio2(d2)
+        .with_sio3(d3)
+        .with_dma(peripherals.DMA_CH0);
 
-    let mut display = t_display_s3_amoled::rm67162::dma::RM67162Dma::new(spi, cs);
+    let mut display = RM67162Dma::new(spi, cs);
     display.reset(&mut rst, &mut delay).unwrap();
     display.init(&mut delay).unwrap();
     display
@@ -712,20 +652,20 @@ fn main() -> ! {
         window.draw_if_needed(|renderer| {
             renderer.set_rendering_rotation(RenderingRotation::Rotate90);
             // renderer.render_by_line(&mut wrapper);
-            let before_render = SystemTimer::now();
+            let before_render = now_us();
             renderer.render(&mut framebuf[..], 240);
             // renderer.render_by_line(&mut frame_buffer);
-            let after_render = SystemTimer::now();
+            let after_render = now_us();
             while tearing_effect.is_high() { }
             while tearing_effect.is_low() { }
-            let after_wait = SystemTimer::now();
+            let after_wait = now_us();
             let _res = unsafe { display.fill_with_framebuffer(cast_pixel_buffer(&framebuf[..])) };
-            let after_fill = SystemTimer::now();
+            let after_fill = now_us();
             println!(
                 "render: {}us, wait: {}us, fill: {}us",
-                ((after_render - before_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
-                ((after_wait - after_render) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
-                ((after_fill - after_wait) * 1_000_000) / SystemTimer::TICKS_PER_SECOND,
+                after_render.wrapping_sub(before_render),
+                after_wait.wrapping_sub(after_render),
+                after_fill.wrapping_sub(after_wait),
             );
         });
 
@@ -733,4 +673,8 @@ fn main() -> ! {
             // if no animation is running, wait for the next input event
         }
     }
+}
+
+fn now_us() -> u64 {
+    time::Instant::now().duration_since_epoch().as_micros()
 }
