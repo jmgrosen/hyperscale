@@ -512,7 +512,7 @@ fn main() -> ! {
         let rotary = Rotary::new(pin_a, pin_b);
         let mut periodic_timer = PeriodicTimer::new(timer00);
         periodic_timer.set_interrupt_handler(timer0_handler);
-        periodic_timer.enable_interrupt(true);
+        periodic_timer.listen();
         periodic_timer.start(time::Duration::from_millis(TIMER_PERIOD_MS)).unwrap();
         INTERRUPT_RESOURCES.borrow_ref_mut(cs).replace(InterruptResources {
             encoder: rotary,
