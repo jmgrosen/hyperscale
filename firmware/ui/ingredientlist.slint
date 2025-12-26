@@ -151,9 +151,13 @@ export component IngredientList inherits ScrollView {
         }
     }
 
+    pure function calc-y() -> length {
+        -name-text.height + -selected-offset() * item-height + (self.height - item-height) / 2
+    }
+
     width: 536px;
     height: 240px;
-    viewport-y: -name-text.height + -selected-offset() * item-height + (self.height - item-height) / 2;
+    viewport-y: calc-y();
     animate viewport-y { duration: 250ms; easing: ease-in-out; }
 
     function move-selection-up() {
@@ -192,6 +196,7 @@ export component IngredientList inherits ScrollView {
                     ingredient-focused();
                 }
             }
+            root.viewport-y = calc-y();
             // HACK
             if (event.text == Key.LeftArrow) {
                 reject

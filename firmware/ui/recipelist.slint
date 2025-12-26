@@ -57,14 +57,16 @@ export component RecipeList inherits ScrollView {
     property<length> item-height : 56px;
     property<RLSelection> selection: {type: SelectionType.weight, subidx: 0};
 
+    pure function calc-y() -> length {
+        selection.type == SelectionType.weight
+        ? self.height / 2 - weight-text.height / 2
+        : -weight-text.height - recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2
+    }
+
     width: 536px;
     height: 240px;
     // TODO: pull out this logic somewhere else somehow?
-    viewport-y:
-      selection.type == SelectionType.weight
-      ? self.height / 2 - weight-text.height / 2
-      // ? 0
-      : -weight-text.height - recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
+    viewport-y: calc-y();
     // viewport-y: -recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
     animate viewport-y { duration: 250ms; easing: ease-in-out; }
     vertical-scrollbar-policy: always-off;
@@ -79,6 +81,7 @@ export component RecipeList inherits ScrollView {
             } else if (event.text == Key.RightArrow) {
                 recipe-focused();
             }
+            root.viewport-y = calc-y();
             accept
         }
 

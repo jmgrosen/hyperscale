@@ -25,7 +25,7 @@ embedded-hal-1 = { package = "embedded-hal", version = "1.0.0" }
 embedded-graphics = { version = "0.8.0" }
 # t-display-s3-amoled = { path = "/Users/jessie/projects/t-display-s3-amoled-rs" }
 t-display-s3-amoled = { git = "https://github.com/jmgrosen/t-display-s3-amoled-rs", rev = "6a611c905d96593dcbfc63508bde742af29d9b41" }
-slint = { version = "1.11", default-features = false, features = [
+slint = { version = "1.14", default-features = false, features = [
     "compat-1-2",
     "libm",
     "unsafe-single-threaded",
