@@ -46,6 +46,8 @@ use slint::{Model, PhysicalSize};
 use t_display_s3_amoled::rm67162::dma::RM67162Dma;
 use t_display_s3_amoled::rm67162::Orientation;
 
+esp_bootloader_esp_idf::esp_app_desc!();
+
 #[derive(Debug, Clone, Copy)]
 enum ButtonEvent {
     Press,
