@@ -70,6 +70,7 @@ export component RecipeList inherits ScrollView {
     // viewport-y: -recipes-text.height - selected-recipe * item-height + (self.height - item-height) / 2;
     animate viewport-y { duration: 250ms; easing: ease-in-out; }
     vertical-scrollbar-policy: always-off;
+    horizontal-scrollbar-policy: always-off;
 
     forward-focus: focus-scope;
     focus-scope := FocusScope {

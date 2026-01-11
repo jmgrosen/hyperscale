@@ -143,6 +143,9 @@ export component IngredientList inherits ScrollView {
     property<Selection> selection : Ingredient;
     property<length> item-height : 56px;
 
+    vertical-scrollbar-policy: always-off;
+    horizontal-scrollbar-policy: always-off;
+
     pure function selected-offset() -> int {
         if (selection == Selection.ScaleFactorChooser) {
             return 0;
