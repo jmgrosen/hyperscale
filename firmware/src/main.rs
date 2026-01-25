@@ -587,6 +587,8 @@ fn main() -> ! {
     let mut pin_b = Input::new(peripherals.GPIO2, pullup);
     let event_queue: &'static mut Queue<Event, 16> = {
         static mut Q: Queue<Event, 16> = Queue::new();
+        // we probably should not use &'static mut :)
+        #[allow(static_mut_refs)]
         unsafe { &mut Q }
     };
     let (event_producer, mut event_consumer) = event_queue.split();
@@ -594,7 +596,7 @@ fn main() -> ! {
     let encoder_button = Input::new(peripherals.GPIO3, pullup);
     let back_button = Input::new(peripherals.GPIO10, pullup);
 
-    let mut tearing_effect = Input::new(peripherals.GPIO9, InputConfig::default());
+    let tearing_effect = Input::new(peripherals.GPIO9, InputConfig::default());
     
     let timer00 = timer_group0.timer0;
     critical_section::with(|cs| {
@@ -750,7 +752,7 @@ fn main() -> ! {
             while tearing_effect.is_high() { }
             while tearing_effect.is_low() { }
             let after_wait = now_us();
-            let _res = unsafe { display.fill_with_framebuffer(cast_pixel_buffer(&framebuf[..])) };
+            let _res = display.fill_with_framebuffer(cast_pixel_buffer(&framebuf[..]));
             let after_fill = now_us();
             println!(
                 "render: {}us, wait: {}us, fill: {}us",
