@@ -2,7 +2,7 @@
 name = "scale-fw"
 version = "0.1.0"
 authors = ["Jessie Grosen"]
-edition = "2021"
+edition = "2024"
 license = "GPL 3"
 repository = "https://github.com/jmgrosen/smart-scale"
 description = "Firmware for my recipe-guiding scale"
