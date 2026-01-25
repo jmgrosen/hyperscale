@@ -46,7 +46,7 @@ use debouncr::{DebouncerStateful, Edge, Repeat6, debounce_stateful_6};
 use slint::platform::software_renderer::RenderingRotation;
 use slint::platform::software_renderer::{MinimalSoftwareWindow, Rgb565Pixel, TargetPixel, PremultipliedRgbaColor};
 use slint::platform::{software_renderer as renderer, Platform, WindowEvent, Key};
-use slint::{Model, PhysicalSize};
+use slint::{ComponentHandle, Model, PhysicalSize};
 
 use t_display_s3_amoled::rm67162::dma::RM67162Dma;
 use t_display_s3_amoled::rm67162::Orientation;
@@ -156,7 +156,9 @@ fn timer0_handler() {
 
 const ONE_KG: f32 = 1.0 / 674500.0;
 
-slint::include_modules!();
+mod ui {
+    slint::include_modules!();
+}
 
 struct Backend {
     window: Rc<renderer::MinimalSoftwareWindow>,
@@ -295,12 +297,12 @@ impl<I: I2cTrait> Scale<I> {
     }
 }
 
-fn ingredient(name: &str, amount: f32) -> Ingredient {
-    Ingredient { name: name.into(), amount }
+fn ingredient(name: &str, amount: f32) -> ui::Ingredient {
+    ui::Ingredient { name: name.into(), amount }
 }
 
-fn vegan_choux() -> Recipe {
-    Recipe {
+fn vegan_choux() -> ui::Recipe {
+    ui::Recipe {
         name: "Vegan Choux".into(),
         ingredients: [
             ingredient("water", 0.06),
@@ -315,8 +317,8 @@ fn vegan_choux() -> Recipe {
     }
 }
 
-fn vegan_creme_pat() -> Recipe {
-    Recipe {
+fn vegan_creme_pat() -> ui::Recipe {
+    ui::Recipe {
         name: "Vegan Creme Pat".into(),
         ingredients: [
             // ingredient("soy milk", 0.243),
@@ -337,8 +339,8 @@ fn vegan_creme_pat() -> Recipe {
     }
 }
 
-fn choux() -> Recipe {
-    Recipe {
+fn choux() -> ui::Recipe {
+    ui::Recipe {
         name: "Choux".into(),
         ingredients: [
             ingredient("water", 0.235),
@@ -351,8 +353,8 @@ fn choux() -> Recipe {
     }
 }
 
-fn creme_pat() -> Recipe {
-    Recipe {
+fn creme_pat() -> ui::Recipe {
+    ui::Recipe {
         name: "Creme Pat".into(),
         ingredients: [
             ingredient("milk", 0.455),
@@ -366,8 +368,8 @@ fn creme_pat() -> Recipe {
     }
 }
 
-fn pasta_dough() -> Recipe {
-    Recipe {
+fn pasta_dough() -> ui::Recipe {
+    ui::Recipe {
         name: "Egg Pasta".into(),
         ingredients: [
             ingredient("flour", 0.255),
@@ -378,8 +380,8 @@ fn pasta_dough() -> Recipe {
     }
 }
 
-fn poolish_bread() -> Recipe {
-    Recipe {
+fn poolish_bread() -> ui::Recipe {
+    ui::Recipe {
         name: "Poolish Bread".into(),
         ingredients: [
             ingredient("flour", 0.5),
@@ -393,8 +395,8 @@ fn poolish_bread() -> Recipe {
     }
 }
 
-fn focaccia() -> Recipe {
-    Recipe {
+fn focaccia() -> ui::Recipe {
+    ui::Recipe {
         name: "Focaccia".into(),
         ingredients: [
             ingredient("flour", 0.5),
@@ -408,8 +410,8 @@ fn focaccia() -> Recipe {
     }
 }
 
-fn kouign_amann() -> Recipe {
-    Recipe {
+fn kouign_amann() -> ui::Recipe {
+    ui::Recipe {
         name: "Kouign Amann".into(),
         ingredients: [
             ingredient("flour", 0.213),
@@ -422,8 +424,8 @@ fn kouign_amann() -> Recipe {
     }
 }
 
-fn pie_dough() -> Recipe {
-    Recipe {
+fn pie_dough() -> ui::Recipe {
+    ui::Recipe {
         name: "Pie Dough".into(),
         ingredients: [
             ingredient("low-protein APF", 0.225),
@@ -435,8 +437,8 @@ fn pie_dough() -> Recipe {
     }
 }
 
-fn butternut_pie() -> Recipe {
-    Recipe {
+fn butternut_pie() -> ui::Recipe {
+    ui::Recipe {
         name: "Butternut Pie".into(),
         ingredients: [
             ingredient("butternut puree", 0.395),
@@ -454,11 +456,11 @@ fn butternut_pie() -> Recipe {
     }
 }
 
-fn progress_for_recipe(recipe: &Recipe) -> RecipeProgress {
-    RecipeProgress {
+fn progress_for_recipe(recipe: &ui::Recipe) -> ui::RecipeProgress {
+    ui::RecipeProgress {
         scale_factor: 1.0,
         ingredient_progresses:
-            iter::repeat(IngredientProgress { done: false, amount: 0.0 })
+            iter::repeat(ui::IngredientProgress { done: false, amount: 0.0 })
             .take(recipe.ingredients.row_count())
             .collect::<Vec<_>>()[..]
             .into(),
@@ -664,13 +666,13 @@ fn main() -> ! {
     // window.dispatch_event(WindowEvent::ScaleFactorChanged { scale_factor: 2.0 });
     window.set_size(PhysicalSize::new(536, 240));
 
-    let ui = AppWindow::new().unwrap();
+    let ui = ui::AppWindow::new().unwrap();
     let _ui_handle = ui.as_weak();
 
     let mut framebuf = [Rgb565PixelFlipped(0); 536*240];
 
     let scale_ref = scale.clone();
-    ui.global::<ScaleControls>().on_zero(move || {
+    ui.global::<ui::ScaleControls>().on_zero(move || {
         scale_ref.borrow_mut().rezero();
     });
 
@@ -724,9 +726,9 @@ fn main() -> ! {
         }
 
         let cur_weight = if let Some(weight) = scale.borrow_mut().step(&mut delay) {
-            ScaleStatus { valid: true, weight }
+            ui::ScaleStatus { valid: true, weight }
         } else {
-            ScaleStatus { valid: false, weight: 0. }
+            ui::ScaleStatus { valid: false, weight: 0. }
         };
         ui.set_current_weight(cur_weight);
 
