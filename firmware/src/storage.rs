@@ -10,7 +10,9 @@ use esp_println::println;
 use esp_storage::FlashStorage;
 use generic_array::typenum;
 use littlefs2::fs::Filesystem;
-use slint::SharedString;
+use slint::{ModelRc, SharedString, VecModel};
+
+use crate::ui;
 
 #[derive(Debug)]
 struct WrappedError(littlefs2::io::Error);
@@ -71,15 +73,213 @@ const CURRENT_VERSION: Version = Version { version: 0 };
 const VERSION_PATH: &'static littlefs2::path::Path = littlefs2::path!("/version");
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct Ingredient {
+pub struct Ingredient {
     name: SharedString,
     amount: f32,
 }
 
+impl Into<ui::Ingredient> for Ingredient {
+    fn into(self) -> ui::Ingredient {
+        ui::Ingredient {
+            name: self.name,
+            amount: self.amount,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
-struct Recipe {
+pub struct Recipe {
     name: SharedString,
     ingredients: Vec<Ingredient>,
+}
+
+impl Into<ui::Recipe> for Recipe {
+    fn into(self) -> ui::Recipe {
+        ui::Recipe {
+            name: self.name,
+            // TODO: this is nasty
+            ingredients: ModelRc::new(
+                self.ingredients
+                    .into_iter()
+                    .map(|i| i.into())
+                    .collect::<VecModel<_>>()
+            ),
+        }
+    }
+}
+
+fn ingredient(name: &str, amount: f32) -> Ingredient {
+    Ingredient { name: name.into(), amount }
+}
+
+fn vegan_choux() -> Recipe {
+    Recipe {
+        name: "Vegan Choux".into(),
+        ingredients: [
+            ingredient("water", 0.06),
+            ingredient("soy milk", 0.06),
+            ingredient("vanilla extract", 0.005),
+            ingredient("sugar", 0.006),
+            ingredient("vegan butter", 0.028),
+            ingredient("all-purpose flour", 0.065),
+            ingredient("Just Egg", 0.125),
+            ingredient("soy milk", 0.030),
+        ].into(),
+    }
+}
+
+fn vegan_creme_pat() -> Recipe {
+    Recipe {
+        name: "Vegan Creme Pat".into(),
+        ingredients: [
+            // ingredient("soy milk", 0.243),
+            // ingredient("vanilla extract", 0.010),
+            // ingredient("salt", 0.001),
+            // ingredient("corn starch", 0.016),
+            // ingredient("sugar", 0.050),
+            // ingredient("Just Egg", 0.083),
+            // ingredient("vegan butter", 0.042),
+            ingredient("soy milk", 0.486),
+            ingredient("vanilla extract", 0.020),
+            ingredient("salt", 0.002),
+            ingredient("corn starch", 0.032),
+            ingredient("sugar", 0.100),
+            ingredient("Just Egg", 0.166),
+            ingredient("vegan butter", 0.084)
+        ].into(),
+    }
+}
+
+fn choux() -> Recipe {
+    Recipe {
+        name: "Choux".into(),
+        ingredients: [
+            ingredient("water", 0.235),
+            ingredient("butter", 0.084),
+            ingredient("sugar", 0.008),
+            ingredient("salt", 0.002),
+            ingredient("all-purpose flour", 0.128),
+            ingredient("eggs", 0.200),
+        ].into(),
+    }
+}
+
+fn creme_pat() -> Recipe {
+    Recipe {
+        name: "Creme Pat".into(),
+        ingredients: [
+            ingredient("milk", 0.455),
+            ingredient("vanilla bean", 0.001),
+            ingredient("sugar", 0.115),
+            ingredient("corn starch", 0.030),
+            ingredient("salt", 0.001),
+            ingredient("egg yolks", 0.070),
+            ingredient("butter", 0.030),
+        ].into(),
+    }
+}
+
+fn pasta_dough() -> Recipe {
+    Recipe {
+        name: "Egg Pasta".into(),
+        ingredients: [
+            ingredient("flour", 0.255),
+            ingredient("whole eggs", 0.110),
+            ingredient("egg yolks", 0.070),
+            ingredient("salt", 0.003),
+        ].into(),
+    }
+}
+
+fn poolish_bread() -> Recipe {
+    Recipe {
+        name: "Poolish Bread".into(),
+        ingredients: [
+            ingredient("flour", 0.5),
+            ingredient("yeast", 0.0004),
+            ingredient("water (80F)", 0.5),
+            ingredient("flour", 0.5),
+            ingredient("salt", 0.021),
+            ingredient("yeast", 0.003),
+            ingredient("water (105F)", 0.25),
+        ].into(),
+    }
+}
+
+fn focaccia() -> Recipe {
+    Recipe {
+        name: "Focaccia".into(),
+        ingredients: [
+            ingredient("flour", 0.5),
+            ingredient("salt", 0.01),
+            ingredient("yeast", 0.004),
+            ingredient("water (roomtemp)", 0.4),
+            ingredient("olive oil", 0.02),
+            ingredient("olive oil", 0.028),
+            ingredient("olive oil", 0.02),
+        ].into(),
+    }
+}
+
+fn kouign_amann() -> Recipe {
+    Recipe {
+        name: "Kouign Amann".into(),
+        ingredients: [
+            ingredient("flour", 0.213),
+            ingredient("salt", 0.0032),
+            ingredient("yeast", 0.0016),
+            ingredient("water (75F)", 0.145),
+            ingredient("salted butter", 0.134),
+            ingredient("sugar", 0.156),
+        ].into(),
+    }
+}
+
+fn pie_dough() -> Recipe {
+    Recipe {
+        name: "Pie Dough".into(),
+        ingredients: [
+            ingredient("low-protein APF", 0.225),
+            ingredient("sugar", 0.015),
+            ingredient("salt", 0.004),
+            ingredient("unsalted butter", 0.225),
+            ingredient("cold tap water", 0.115),
+        ].into(),
+    }
+}
+
+fn butternut_pie() -> Recipe {
+    Recipe {
+        name: "Butternut Pie".into(),
+        ingredients: [
+            ingredient("butternut puree", 0.395),
+            ingredient("condensed milk", 0.680),
+            ingredient("light brown sugar", 0.115),
+            ingredient("vanilla extract", 0.015),
+            ingredient("3/2tsp ground ginger", 0.001),
+            ingredient("3/2tsp ground cinnamon", 0.001),
+            ingredient("1/4tsp grated nutmeg", 0.001),
+            ingredient("salt", 0.001),
+            ingredient("1/8tsp ground cloves", 0.001),
+            ingredient("unsalted butter", 0.030),
+            ingredient("eggs", 0.145),
+        ].into(),
+    }
+}
+
+pub fn default_recipes() -> Vec<Recipe> {
+    [
+        vegan_choux(),
+        vegan_creme_pat(),
+        choux(),
+        creme_pat(),
+        pasta_dough(),
+        poolish_bread(),
+        focaccia(),
+        kouign_amann(),
+        pie_dough(),
+        butternut_pie(),
+    ].into()
 }
 
 pub struct FilesystemRegion<'a>(partitions::FlashRegion<'a, FlashStorage<'a>>);
