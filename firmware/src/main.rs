@@ -499,19 +499,19 @@ mod storage {
         }
     }
 
-    struct WrappedFile<F>(F);
+    struct WrappedFile<'a, F>(&'a F);
 
-    impl<F> eio::ErrorType for WrappedFile<F> {
+    impl<'a, F> eio::ErrorType for WrappedFile<'a, F> {
         type Error = WrappedError;
     }
 
-    impl<F: littlefs2::io::Read> eio::Read for WrappedFile<F> {
+    impl<'a, F: littlefs2::io::Read> eio::Read for WrappedFile<'a, F> {
         fn read(&mut self, buf: &mut [u8]) -> Result<usize, WrappedError> {
             self.0.read(buf).map_err(WrappedError)
         }
     }
 
-    impl<F: littlefs2::io::Write> eio::Write for WrappedFile<F> {
+    impl<'a, F: littlefs2::io::Write> eio::Write for WrappedFile<'a, F> {
         fn write(&mut self, buf: &[u8]) -> Result<usize, WrappedError> {
             self.0.write(buf).map_err(WrappedError)
         }
@@ -521,18 +521,21 @@ mod storage {
         }
     }
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     struct Version {
         version: u32,
     }
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    const CURRENT_VERSION: Version = Version { version: 0 };
+    const VERSION_PATH: &'static littlefs2::path::Path = littlefs2::path!("/version");
+
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     struct Ingredient {
         name: SharedString,
         amount: f32,
     }
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     struct Recipe {
         name: SharedString,
         ingredients: Vec<Ingredient>,
@@ -570,12 +573,59 @@ mod storage {
         }
     }
 
+    fn write_current_version<'a, 'b>(fs: &Filesystem<'a, FilesystemRegion<'b>>) {
+        fs.create_file_and_then(
+            VERSION_PATH,
+            |f| {
+                postcard::to_eio(&CURRENT_VERSION, WrappedFile(f))
+                    .expect("serialization error while trying to write version");
+                Ok(())
+            },
+        ).expect("io error while trying to write version");
+    }
+
+    fn migrate(_version_on_disk: Version) {
+        println!("lmao no migration");
+    }
+
     fn init_fs(region: &mut FilesystemRegion<'_>) {
-        if !Filesystem::is_mountable(region) {
-            Filesystem::format(region).expect("failed formatting!");
-            println!("formatted fs");
-        } else {
+        let mut alloc = Filesystem::allocate();
+
+        let fs = if let Ok(fs) = Filesystem::mount(&mut alloc, region) {
             println!("fs looks good");
+            fs
+        } else {
+            Filesystem::format(region)
+                .expect("failed formatting!");
+            println!("formatted fs");
+            Filesystem::mount(&mut alloc, region)
+                .expect("failed to mount even after formatting")
+        };
+
+        let mut buf = [0u8; 24];
+
+        let version_result: Result<Result<Version, _>, _> = fs.open_file_and_then(
+            VERSION_PATH,
+            |f| {
+                Ok(postcard::from_eio((WrappedFile(f), &mut buf[..])).map(|t| t.0))
+            },
+        );
+        println!("version_result = {version_result:?}");
+
+        match version_result {
+            Ok(Ok(version)) => {
+                migrate(version);
+            }
+            Ok(Err(_)) => {
+                panic!("corrupted version file??");
+            }
+            Err(littlefs2::io::Error::NO_SUCH_ENTRY) => {
+                println!("missing version file, creating");
+                write_current_version(&fs);
+            }
+            Err(err) => {
+                panic!("io error while trying to read version: {:?}", err)
+            }
         }
     }
 
