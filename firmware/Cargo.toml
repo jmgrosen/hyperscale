@@ -24,6 +24,15 @@ esp-bootloader-esp-idf = { version = "0.4.0", features = [
     "esp32s3",
 ] }
 
+serde = { version = "1.0.228", default-features = false, features = ["alloc"] }
+serde_json = { version = "1.0.149", default-features = false, features = ["alloc"] }
+littlefs2 = "0.6.1"
+esp-storage = { version = "0.8.1", features = ["esp32s3"] }
+embedded-storage = "0.3.1"
+generic-array = "1.3.5"
+postcard = { version = "1.1.3", features = ["alloc", "embedded-io-06"] }
+embedded-io = { version = "0.6", features = ["alloc"] }
+
 embedded-hal-1 = { package = "embedded-hal", version = "1.0.0" }
 embedded-graphics = { version = "0.8.0" }
 # t-display-s3-amoled = { path = "/Users/jessie/projects/t-display-s3-amoled-rs" }
@@ -33,6 +42,7 @@ slint = { version = "1.14", default-features = false, features = [
     "libm",
     "unsafe-single-threaded",
     "renderer-software",
+    "serde",
 ] }
 tinygif = "0.0.3"
 
@@ -43,10 +53,6 @@ nau7802 = { git = "https://github.com/jmgrosen/nau7802-rs", rev = "d56abab" }
 nb = "1"
 heapless = "0.8"
 debouncr = "0.2.2"
-littlefs2 = "0.6.1"
-esp-storage = { version = "0.8.1", features = ["esp32s3"] }
-embedded-storage = "0.3.1"
-generic-array = "1.3.5"
 
 [build-dependencies]
 slint-build = "1.9"
