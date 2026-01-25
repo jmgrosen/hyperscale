@@ -14,3 +14,8 @@ build-std = ["alloc", "core"]
 
 [env]
 ESP_HAL_CONFIG_PSRAM_MODE = "octal"
+CC_xtensa_esp32s3_none_elf = "xtensa-esp32s3-elf-gcc"
+CFLAGS_xtensa_esp32s3_none_elf = "-mlongcalls"
+
+[profile.dev.package.esp-storage]
+opt-level = 3

@@ -43,6 +43,10 @@ nau7802 = { git = "https://github.com/jmgrosen/nau7802-rs", rev = "d56abab" }
 nb = "1"
 heapless = "0.8"
 debouncr = "0.2.2"
+littlefs2 = "0.6.1"
+esp-storage = { version = "0.8.1", features = ["esp32s3"] }
+embedded-storage = "0.3.1"
+generic-array = "1.3.5"
 
 [build-dependencies]
 slint-build = "1.9"
