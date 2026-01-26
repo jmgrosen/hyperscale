@@ -1,21 +1,39 @@
 // Copyright (C) Jessie Grosen 2026
 // SPDX-License-Identifier: MIT
 
-use alloc::vec::Vec;
+/**
 
-use embedded_io as eio;
+Filesystem layout:
+
+ - /version: The storage version format, postcard-serialized `Version`.
+ - /recipes/<sha256 hash>: A recipe, where the hash a hex digest of the SHA256
+   of its postcard-serialized form.
+
+*/
+
+use alloc::vec::Vec;
+use core::{convert::Infallible, fmt, ops::Deref};
+
+use embedded_io::{self as eio, WriteFmtError};
 use embedded_storage::{ReadStorage, nor_flash::NorFlash};
 use esp_bootloader_esp_idf::partitions;
+use esp_hal::sha::{Sha, Sha256, ShaAlgorithm, ShaDigest};
 use esp_println::println;
 use esp_storage::FlashStorage;
+use nb::block;
 use generic_array::typenum;
-use littlefs2::fs::Filesystem;
+use littlefs2::{fs::Filesystem, path::Path};
 use slint::{ModelRc, SharedString, VecModel};
 
 use crate::ui;
 
-#[derive(Debug)]
 struct WrappedError(littlefs2::io::Error);
+
+impl fmt::Debug for WrappedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}, {:?}", self.0.code(), eio::Error::kind(self))
+    }
+}
 
 impl eio::Error for WrappedError {
     fn kind(&self) -> eio::ErrorKind {
@@ -42,6 +60,29 @@ impl eio::Error for WrappedError {
     }
 }
 
+struct EioHasher<'d, 'a>(ShaDigest<'d, Sha256, &'a mut Sha<'d>>);
+
+impl<'a, 'd> eio::ErrorType for EioHasher<'d, 'a> {
+    type Error = Infallible;
+}
+
+impl<'d, 'a> eio::Write for EioHasher<'d, 'a> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Infallible> {
+        block!(self.0.update(buf)).unwrap();
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<(), Infallible> {
+        Ok(())
+    }
+}
+
+impl<'d, 'a> EioHasher<'d, 'a> {
+    fn finish(mut self, output: &mut [u8]) {
+        block!(self.0.finish(output)).unwrap();
+    }
+}
+
 struct WrappedFile<'a, F>(&'a F);
 
 impl<'a, F> eio::ErrorType for WrappedFile<'a, F> {
@@ -56,7 +97,7 @@ impl<'a, F: littlefs2::io::Read> eio::Read for WrappedFile<'a, F> {
 
 impl<'a, F: littlefs2::io::Write> eio::Write for WrappedFile<'a, F> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, WrappedError> {
-        self.0.write(buf).map_err(WrappedError)
+        Ok(self.0.write(buf).map_err(WrappedError).expect("write"))
     }
 
     fn flush(&mut self) -> Result<(), WrappedError> {
@@ -70,7 +111,8 @@ struct Version {
 }
 
 const CURRENT_VERSION: Version = Version { version: 0 };
-const VERSION_PATH: &'static littlefs2::path::Path = littlefs2::path!("/version");
+const VERSION_PATH: &'static Path = littlefs2::path!("/version");
+const RECIPES_DIR_PATH: &'static Path = littlefs2::path!("/recipes/");
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct Ingredient {
@@ -91,6 +133,85 @@ impl Into<ui::Ingredient> for Ingredient {
 pub struct Recipe {
     name: SharedString,
     ingredients: Vec<Ingredient>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct RecipeId {
+    digest: [u8; Sha256::DIGEST_LENGTH],
+}
+
+const RECIPE_PATH_PREFIX: &'static [u8] = b"/recipes/";
+const RECIPE_PATH_LENGTH: usize =
+    // 2 hex bytes per digest byte
+    RECIPE_PATH_PREFIX.len() + Sha256::DIGEST_LENGTH * 2;
+#[derive(Debug)]
+struct RecipePath {
+    bytes: [u8; RECIPE_PATH_LENGTH + 1], // + 1 for null byte
+}
+
+impl Deref for RecipePath {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        Path::from_bytes_with_nul(&self.bytes[..])
+            .expect("somehow made an invalid recipe path")
+    }
+}
+
+impl From<RecipeId> for RecipePath {
+    fn from(id: RecipeId) -> RecipePath {
+        let mut bytes = [0u8; RECIPE_PATH_LENGTH + 1];
+        bytes[..RECIPE_PATH_PREFIX.len()].copy_from_slice(RECIPE_PATH_PREFIX);
+        let mut hex_writer = &mut bytes[RECIPE_PATH_PREFIX.len()..RECIPE_PATH_LENGTH];
+        write_hex_string(&mut hex_writer, &id.digest[..])
+            .expect("failed to write hex string of recipe digest");
+        RecipePath { bytes }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct RecipeOrder {
+    recipes: Vec<RecipeId>,
+}
+
+fn write_hex_string<W: eio::Write>(w: &mut W, buf: &[u8]) -> Result<(), WriteFmtError<W::Error>> {
+    for c in buf {
+        write!(w, "{:02x}", c)?;
+    }
+    Ok(())
+}
+
+impl Recipe {
+    fn calc_id<'d>(&self, sha: &mut Sha<'d>) -> RecipeId {
+        let mut hasher = EioHasher(sha.start());
+        postcard::to_eio(self, &mut hasher).unwrap();
+        let mut digest = [0u8; Sha256::DIGEST_LENGTH];
+        hasher.finish(&mut digest[..]);
+        RecipeId { digest }
+    }
+
+    fn calc_path<'d>(&self, sha: &mut Sha<'d>) -> RecipePath {
+        self.calc_id(sha).into()
+    }
+
+    fn write_to_fs<'a, 'b, 'd>(
+        &self,
+        fs: &Filesystem<'a, FilesystemRegion<'b>>,
+        sha: &mut Sha<'d>,
+    ) {
+        let recipe_path = self.calc_path(sha);
+        println!("recipe path is {}", recipe_path.deref());
+
+        fs.create_file_and_then(
+            &recipe_path,
+            |f| {
+                f.write(b"asdf").map_err(WrappedError).expect("asdf error");
+                postcard::to_eio(self, WrappedFile(f))
+                    .expect("serialization error while trying to write recipe");
+                Ok(())
+            },
+        ).map_err(WrappedError).expect("io error while trying to write recipe");
+    }
 }
 
 impl Into<ui::Recipe> for Recipe {
@@ -329,7 +450,15 @@ fn migrate(_version_on_disk: Version) {
     println!("lmao no migration");
 }
 
-fn init_fs(region: &mut FilesystemRegion<'_>) {
+fn write_default_recipes<'a, 'b, 'd>(fs: &Filesystem<'a, FilesystemRegion<'b>>, sha: &mut Sha<'d>) {
+    fs.create_dir_all(RECIPES_DIR_PATH).expect("failed to make recipes directory");
+
+    for recipe in default_recipes() {
+        recipe.write_to_fs(&fs, sha);
+    }
+}
+
+fn init_fs<'d>(region: &mut FilesystemRegion<'_>, sha: &mut Sha<'d>) {
     let mut alloc = Filesystem::allocate();
 
     let fs = if let Ok(fs) = Filesystem::mount(&mut alloc, region) {
@@ -368,9 +497,11 @@ fn init_fs(region: &mut FilesystemRegion<'_>) {
             panic!("io error while trying to read version: {:?}", err)
         }
     }
+
+    write_default_recipes(&fs, sha);
 }
 
-pub fn find_fs_region<'a>(pt_mem: &'a mut [u8], flash: &'a mut FlashStorage<'a>) -> FilesystemRegion<'a> {
+pub fn find_fs_region<'a, 'd>(pt_mem: &'a mut [u8], flash: &'a mut FlashStorage<'a>, sha: &mut Sha<'d>) -> FilesystemRegion<'a> {
     println!("flash size = {}", flash.capacity());
 
     let pt = partitions::read_partition_table(flash, pt_mem).unwrap();
@@ -383,14 +514,15 @@ pub fn find_fs_region<'a>(pt_mem: &'a mut [u8], flash: &'a mut FlashStorage<'a>)
 
     let littlefs = pt
         .find_partition(partitions::PartitionType::Data(
-            partitions::DataPartitionSubType::Nvs,
+            partitions::DataPartitionSubType::LittleFs,
         ))
         .unwrap()
         .unwrap();
+    println!("littlefs partition has size {}", littlefs.len());
     let littlefs_partition = littlefs.as_embedded_storage(flash);
     let mut region = FilesystemRegion(littlefs_partition);
 
-    init_fs(&mut region);
+    init_fs(&mut region, sha);
 
     region
 

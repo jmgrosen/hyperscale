@@ -20,6 +20,7 @@ use embedded_hal_1::delay::DelayNs;
 use embedded_hal_1::digital::InputPin;
 use embedded_hal_1::i2c::I2c as I2cTrait;
 use esp_backtrace as _;
+use esp_hal::sha::Sha;
 use esp_println::println;
 use esp_hal::{
     clock::CpuClock,
@@ -315,8 +316,10 @@ fn main() -> ! {
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
     println!("initted psram");
 
+    let mut sha = Sha::new(peripherals.SHA);
+
     let mut pt_mem = [0u8; partitions::PARTITION_TABLE_MAX_LEN];
-    let _fs_region = storage::find_fs_region(&mut pt_mem, &mut FlashStorage::new(peripherals.FLASH));
+    let _fs_region = storage::find_fs_region(&mut pt_mem, &mut FlashStorage::new(peripherals.FLASH), &mut sha);
 
     // Disable the RTC and TIMG watchdog timers
     let mut rtc = Rtc::new(peripherals.LPWR);
