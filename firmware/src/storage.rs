@@ -159,8 +159,8 @@ impl Deref for RecipePath {
     }
 }
 
-impl From<RecipeId> for RecipePath {
-    fn from(id: RecipeId) -> RecipePath {
+impl RecipePath {
+    fn from_id(id: &RecipeId) -> RecipePath {
         let mut bytes = [0u8; RECIPE_PATH_LENGTH + 1];
         bytes[..RECIPE_PATH_PREFIX.len()].copy_from_slice(RECIPE_PATH_PREFIX);
         let mut hex_writer = &mut bytes[RECIPE_PATH_PREFIX.len()..RECIPE_PATH_LENGTH];
@@ -186,6 +186,17 @@ impl RecipeOrder {
             },
         ).map_err(WrappedError).expect("io error while trying to write order");
     }
+
+    fn read_from_fs<'a, 'b>(fs: &Filesystem<'a, FilesystemRegion<'b>>) -> RecipeOrder {
+        fs.open_file_and_then(
+            ORDER_PATH,
+            |f| {
+                // TODO: FIX THIS HACK!!!
+                let mut buf = [0u8; 256];
+                Ok(postcard::from_eio((WrappedFile(f), &mut buf[..])).map(|t| t.0).expect("serialization error in reading order"))
+            }
+        ).expect("io error in reading order")
+    }
 }
 
 fn write_hex_string<W: eio::Write>(w: &mut W, buf: &[u8]) -> Result<(), WriteFmtError<W::Error>> {
@@ -205,7 +216,7 @@ impl Recipe {
     }
 
     fn calc_path<'d>(&self, sha: &mut Sha<'d>) -> RecipePath {
-        self.calc_id(sha).into()
+        RecipePath::from_id(&self.calc_id(sha))
     }
 
     fn write_to_fs<'a, 'b, 'd>(
@@ -224,6 +235,18 @@ impl Recipe {
                 Ok(())
             },
         ).map_err(WrappedError).expect("io error while trying to write recipe");
+    }
+
+    fn read_from_fs<'a, 'b>(fs: &Filesystem<'a, FilesystemRegion<'b>>, id: &RecipeId) -> Recipe {
+        let recipe_path = RecipePath::from_id(id);
+        fs.open_file_and_then(
+            &recipe_path,
+            |f| {
+                // TODO: FIX THIS HACK!!!
+                let mut buf = [0u8; 256];
+                Ok(postcard::from_eio((WrappedFile(f), &mut buf[..])).map(|t| t.0).expect("serialization error in reading recipe"))
+            }
+        ).expect("io error in reading recipe")
     }
 }
 
@@ -478,6 +501,16 @@ fn write_default_recipes<'a, 'b, 'd>(fs: &Filesystem<'a, FilesystemRegion<'b>>, 
     order.write_to_fs(fs);
 }
 
+fn read_recipes<'a, 'b>(fs: &Filesystem<'a, FilesystemRegion<'b>>) {
+    let order = RecipeOrder::read_from_fs(fs);
+    println!("recipe order: {:?}", order);
+
+    for id in order.recipes {
+        let recipe = Recipe::read_from_fs(fs, &id);
+        println!("recipe: {:?}", recipe);
+    }
+}
+
 fn init_fs<'d>(region: &mut FilesystemRegion<'_>, sha: &mut Sha<'d>) {
     let mut alloc = Filesystem::allocate();
 
@@ -519,6 +552,8 @@ fn init_fs<'d>(region: &mut FilesystemRegion<'_>, sha: &mut Sha<'d>) {
     }
 
     write_default_recipes(&fs, sha);
+
+    read_recipes(&fs);
 }
 
 pub fn find_fs_region<'a, 'd>(pt_mem: &'a mut [u8], flash: &'a mut FlashStorage<'a>, sha: &mut Sha<'d>) -> FilesystemRegion<'a> {
