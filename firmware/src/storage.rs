@@ -113,6 +113,7 @@ struct Version {
 const CURRENT_VERSION: Version = Version { version: 0 };
 const VERSION_PATH: &'static Path = littlefs2::path!("/version");
 const RECIPES_DIR_PATH: &'static Path = littlefs2::path!("/recipes/");
+const ORDER_PATH: &'static Path = littlefs2::path!("/order");
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct Ingredient {
@@ -174,6 +175,19 @@ pub struct RecipeOrder {
     recipes: Vec<RecipeId>,
 }
 
+impl RecipeOrder {
+    fn write_to_fs<'a, 'b>(&self, fs: &Filesystem<'a, FilesystemRegion<'b>>) {
+        fs.create_file_and_then(
+            ORDER_PATH,
+            |f| {
+                postcard::to_eio(self, WrappedFile(f))
+                    .expect("serialization error while trying to write order");
+                Ok(())
+            },
+        ).map_err(WrappedError).expect("io error while trying to write order");
+    }
+}
+
 fn write_hex_string<W: eio::Write>(w: &mut W, buf: &[u8]) -> Result<(), WriteFmtError<W::Error>> {
     for c in buf {
         write!(w, "{:02x}", c)?;
@@ -205,7 +219,6 @@ impl Recipe {
         fs.create_file_and_then(
             &recipe_path,
             |f| {
-                f.write(b"asdf").map_err(WrappedError).expect("asdf error");
                 postcard::to_eio(self, WrappedFile(f))
                     .expect("serialization error while trying to write recipe");
                 Ok(())
@@ -453,9 +466,16 @@ fn migrate(_version_on_disk: Version) {
 fn write_default_recipes<'a, 'b, 'd>(fs: &Filesystem<'a, FilesystemRegion<'b>>, sha: &mut Sha<'d>) {
     fs.create_dir_all(RECIPES_DIR_PATH).expect("failed to make recipes directory");
 
+    let recipes = default_recipes();
+    let order = RecipeOrder {
+        recipes: recipes.iter().map(|r| r.calc_id(sha)).collect(),
+    };
+
     for recipe in default_recipes() {
         recipe.write_to_fs(&fs, sha);
     }
+
+    order.write_to_fs(fs);
 }
 
 fn init_fs<'d>(region: &mut FilesystemRegion<'_>, sha: &mut Sha<'d>) {
